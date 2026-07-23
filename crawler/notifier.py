@@ -89,28 +89,39 @@ def notify_new_items(
     users: list[User],
     items: list[Item],
     group_names: dict[str, str] | None = None,
-) -> Path | None:
-    """Send per-recipient emails filtered by notify_sources; fall back to a preview file."""
+) -> tuple[Path | None, list[str]]:
+    """수신자별로 '알림 받을 사이트'만 걸러 보낸다.
+    반환값 = (미리보기 파일 경로 또는 None, 실패/안내 메시지 목록)."""
+    notes: list[str] = []
     if not items:
-        return None
+        return None, notes
     group_names = group_names or {}
     recipients = [u for u in users if u.notify_email and u.email]
+    if not recipients:
+        notes.append("이메일 알림을 켠 사용자가 없습니다.")
 
-    if recipients and settings.email_provider in {"gmail", "smtp"}:
+    targeted = [(u, _filter_for_user(items, u)) for u in recipients]
+    targeted = [(u, mine) for u, mine in targeted if mine]
+    if recipients and not targeted:
+        notes.append("새 글은 있으나 그 사이트를 '알림 받을 사이트'로 고른 사람이 없습니다.")
+
+    if targeted and settings.email_provider in {"gmail", "smtp"}:
         sent_any = False
-        for user in recipients:
-            mine = _filter_for_user(items, user)
-            if not mine:
-                continue
-            if _send(settings, [user.email], _subject(mine), build_email_html(mine, group_names)):
+        for user, mine in targeted:
+            ok, reason = _send(settings, [user.email], _subject(mine), build_email_html(mine, group_names))
+            if ok:
                 sent_any = True
-        if sent_any:
-            return None
+            else:
+                notes.append(f"{user.email} 발송 실패 — {reason}")
+        if sent_any and not notes:
+            return None, notes
+    elif targeted:
+        notes.append(f"발송 방식이 '{settings.email_provider or '미설정'}'이라 실제 발송은 하지 않았습니다(미리보기만 생성).")
 
     preview = ROOT_DIR / "data" / "last_email_preview.html"
     preview.parent.mkdir(parents=True, exist_ok=True)
     preview.write_text(build_email_html(items, group_names), encoding="utf-8")
-    return preview
+    return preview, notes
 
 
 def notify_failures(settings: Settings, users: list[User], failures: list[tuple[str, str]]) -> Path | None:
@@ -122,7 +133,8 @@ def notify_failures(settings: Settings, users: list[User], failures: list[tuple[
     html_body = build_failure_html(failures)
 
     if admins and settings.email_provider in {"gmail", "smtp"}:
-        if any(_send(settings, [u.email], subject, html_body) for u in admins):
+        # 실패 알림은 '알림 받을 사이트' 설정과 무관하게 관리자 전원에게 보낸다.
+        if any(_send(settings, [u.email], subject, html_body)[0] for u in admins):
             return None
 
     preview = ROOT_DIR / "data" / "last_failure_preview.html"
@@ -131,16 +143,25 @@ def notify_failures(settings: Settings, users: list[User], failures: list[tuple[
     return preview
 
 
-def _send(settings: Settings, recipients: list[str], subject: str, html_body: str) -> bool:
+def _send(settings: Settings, recipients: list[str], subject: str, html_body: str) -> tuple[bool, str]:
+    """(성공여부, 실패이유). 실패 이유를 절대 삼키지 않는다 —
+    예전에는 예외를 통째로 무시해서 '메일이 왜 안 오는지' 알 방법이 없었다."""
     if settings.email_provider == "gmail":
-        return _send_gmail(settings, recipients, subject, html_body)
-    if settings.email_provider == "smtp" and settings.smtp_host:
+        try:
+            if _send_gmail(settings, recipients, subject, html_body):
+                return True, ""
+            return False, "Gmail API 설정 파일이 없거나 관련 패키지가 설치되지 않았습니다."
+        except Exception as exc:
+            return False, f"Gmail: {type(exc).__name__}: {exc}"
+    if settings.email_provider == "smtp":
+        if not settings.smtp_host:
+            return False, "SMTP_HOST가 비어 있습니다."
         try:
             _send_smtp(settings, recipients, subject, html_body)
-            return True
-        except Exception:
-            return False
-    return False
+            return True, ""
+        except Exception as exc:
+            return False, f"SMTP({settings.smtp_host}:{settings.smtp_port}) {type(exc).__name__}: {exc}"
+    return False, f"이메일 발송 방식이 '{settings.email_provider or '미설정'}'이라 실제 발송을 하지 않았습니다."
 
 
 def _send_smtp(settings: Settings, recipients: list[str], subject: str, html_body: str) -> None:
@@ -150,8 +171,17 @@ def _send_smtp(settings: Settings, recipients: list[str], subject: str, html_bod
     message["To"] = ", ".join(recipients)
     message.attach(MIMEText(html_body, "html", "utf-8"))
 
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
-        server.starttls()
+    # 465는 처음부터 TLS(SMTPS), 그 외에는 서버가 STARTTLS를 지원할 때만 승격한다.
+    # 예전에는 무조건 starttls()를 불러서, 465를 쓰거나 STARTTLS가 없는 서버에서는 항상 실패했다.
+    if settings.smtp_port == 465:
+        connection = smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=30)
+    else:
+        connection = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30)
+    with connection as server:
+        server.ehlo()
+        if settings.smtp_port != 465 and server.has_extn("starttls"):
+            server.starttls()
+            server.ehlo()
         if settings.smtp_username:
             server.login(settings.smtp_username, settings.smtp_password)
         server.sendmail(message["From"], recipients, message.as_string())

@@ -699,7 +699,7 @@ export function mountApp(root, ctx) {
       : el('div', { class: 'banner banner--warn' }, [icon('alert'), '데모 모드에는 실제 크롤러가 없습니다. 아래는 샘플 실행 기록입니다.']);
     const rows = data.logs.length ? data.logs.map(log => el('div', { class: 'row' }, [
       el('div', { class: 'logline' }, [el('b', { text: localDateTime(log.run_at) }), el('span', { class: 'muted', text: relativeTime(log.run_at) }), el('span', { class: 'tag', text: `신규 ${log.new_items_count}` }), el('span', { class: 'tag tag--on', text: `성공 ${log.success_count}/${log.total_sources}` }), log.fail_count ? el('span', { class: 'tag tag--off', text: `실패 ${log.fail_count}` }) : null, el('span', { class: 'muted', text: `${(log.duration_seconds || 0).toFixed(1)}s` })]),
-      (log.failed_sources || []).length ? el('div', {}, Object.entries(log.error_messages || {}).map(([sid, m]) => { const s = data.sources.find(x => x.id === sid); return el('div', { class: 'logfail' }, [el('b', { text: (s ? s.name : sid) + ': ' }), m]); })) : null,
+      Object.keys(log.error_messages || {}).length ? el('div', {}, Object.entries(log.error_messages).map(([sid, m]) => { const s = data.sources.find(x => x.id === sid); return el('div', { class: 'logfail' }, [el('b', { text: (s ? s.name : sid) + ': ' }), m]); })) : null,
     ])) : [emptyState('아직 크롤링 로그가 없어요', null, 'list')];
     mount(panel, el('div', { class: 'card' }, [el('h2', { class: 'card__title', text: '크롤링 로그' }), bar, el('div', { class: 'rows loglist', style: { marginTop: '14px' } }, rows)]));
   }

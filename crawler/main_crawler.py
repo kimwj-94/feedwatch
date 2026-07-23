@@ -113,8 +113,11 @@ def run(source_filter: str | None = None) -> int:
     users = repository.list_users()
 
     preview = None
+    email_notes: list[str] = []
     if config.get("email_enabled", True) and new_items:
-        preview = notify_new_items(settings, users, new_items, group_names)
+        preview, email_notes = notify_new_items(settings, users, new_items, group_names)
+    elif new_items:
+        email_notes.append("설정에서 이메일 알림이 꺼져 있어 발송하지 않았습니다.")
     if newly_failing:
         notify_failures(settings, users, newly_failing)
 
@@ -126,7 +129,8 @@ def run(source_filter: str | None = None) -> int:
         fail_count=len(failed_sources),
         new_items_count=len(new_items),
         failed_sources=failed_sources,
-        error_messages=error_messages,
+        # 이메일 문제는 앱의 '크롤링 로그'에서도 보이게 남긴다(조용한 실패 방지).
+        error_messages={**error_messages, **({"이메일": " / ".join(email_notes)} if email_notes else {})},
         duration_seconds=round(time.time() - started, 2),
     )
     repository.save_log(log)
@@ -135,6 +139,8 @@ def run(source_filter: str | None = None) -> int:
         f"FeedWatch crawl complete: sources={len(sources)}, success={success_count}, "
         f"failed={len(failed_sources)}, new_items={len(new_items)}"
     )
+    for note in email_notes:
+        print(f"[EMAIL] {note}")
     if preview:
         print(f"Email preview written to {preview}")
     for source_id, message in error_messages.items():
