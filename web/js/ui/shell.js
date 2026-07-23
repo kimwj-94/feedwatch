@@ -219,7 +219,14 @@ export function mountApp(root, ctx) {
         el('div', { class: 'item__meta' }, [
           el('span', { class: 'item__src', text: item.source_name }),
           el('span', { class: 'sep', text: '·' }),
-          el('span', { class: 'item__time', title: localDateTime(item.fetched_at), text: relativeTime(item.fetched_at) }),
+          // 사이트가 알려준 작성 시각이 있으면 그걸 보여준다(없으면 우리가 발견한 시각).
+          el('span', {
+            class: 'item__time',
+            title: item.published_at
+              ? `작성 ${localDateTime(item.published_at)} · 수집 ${localDateTime(item.fetched_at)}`
+              : `수집 ${localDateTime(item.fetched_at)}`,
+            text: relativeTime(item.published_at || item.fetched_at),
+          }),
           ...itemGroups.map(g => el('span', { class: `chip chip--g${groupColorIndex(g, data.groups)}`, text: g.name })),
           el('span', { class: 'item__url', text: prettyUrl(item.url) }),
         ]),
@@ -245,7 +252,7 @@ export function mountApp(root, ctx) {
       el('span', { class: `avatar avatar--sm chip--g${ci}`, 'aria-hidden': 'true', text: (it.source_name || '?').trim().charAt(0) }),
       el('span', { class: 'dline__name', text: it.title }),
       unseen ? el('span', { class: 'dline__new', title: '직전 방문 이후 도착', text: 'NEW' }) : null,
-      el('span', { class: 'dline__sub', text: showTime ? relativeTime(it.fetched_at) : gs.map(x => x.name).join(' · ') }),
+      el('span', { class: 'dline__sub', title: it.published_at ? `작성 ${localDateTime(it.published_at)}` : '', text: showTime ? relativeTime(it.published_at || it.fetched_at) : gs.map(x => x.name).join(' · ') }),
     ]);
   }
   function renderDashboard() {

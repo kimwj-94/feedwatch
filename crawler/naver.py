@@ -6,7 +6,7 @@ import feedparser
 import requests
 from bs4 import BeautifulSoup
 
-from crawler.general import crawl_general_source
+from crawler.general import crawl_general_source, entry_published
 from shared.models import Item, Source, item_hash, new_id
 
 
@@ -63,7 +63,7 @@ def _crawl_rss(source: Source, rss_url: str, max_items: int) -> list[Item]:
         url = entry.get("link", "").strip()
         if not title or not url:
             continue
-        items.append(_make_item(source, title, url))
+        items.append(_make_item(source, title, url, entry.get("id"), entry_published(entry)))
     return items
 
 
@@ -142,7 +142,7 @@ def _parse_html_items(source: Source, html: str, base_url: str, max_items: int) 
     return items
 
 
-def _make_item(source: Source, title: str, url: str) -> Item:
+def _make_item(source: Source, title: str, url: str, guid: str | None = None, published_at: str | None = None) -> Item:
     return Item(
         id=new_id("item"),
         source_id=source.id,
@@ -150,5 +150,6 @@ def _make_item(source: Source, title: str, url: str) -> Item:
         group_ids=list(source.group_ids),
         title=title,
         url=url,
-        hash=item_hash(source.id, title, url),
+        hash=item_hash(source.id, title, url, guid),
+        published_at=published_at,
     )

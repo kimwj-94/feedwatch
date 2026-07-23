@@ -5,6 +5,7 @@ import re
 import feedparser
 import requests
 
+from crawler.general import entry_published
 from shared.models import Item, Source, item_hash, new_id
 
 YT_RSS = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
@@ -14,10 +15,11 @@ UA = {
 }
 
 
-def _make_item(source: Source, title: str, url: str) -> Item:
+def _make_item(source: Source, title: str, url: str, guid: str | None = None, published_at: str | None = None) -> Item:
     return Item(
         id=new_id("item"), source_id=source.id, source_name=source.name,
-        group_ids=list(source.group_ids), title=title, url=url, hash=item_hash(source.id, title, url),
+        group_ids=list(source.group_ids), title=title, url=url,
+        hash=item_hash(source.id, title, url, guid), published_at=published_at,
     )
 
 
@@ -56,7 +58,7 @@ def crawl_youtube_source(source: Source, api_key: str = "") -> list[Item]:
             title = (entry.get("title") or "").strip()
             link = (entry.get("link") or "").strip()
             if title and link:
-                items.append(_make_item(source, title, link))
+                items.append(_make_item(source, title, link, entry.get("yt_videoid") or entry.get("id"), entry_published(entry)))
         return items
     if api_key:
         return _crawl_via_api(source, api_key, max_items)

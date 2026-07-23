@@ -5,7 +5,7 @@ import { Adapter, DEFAULT_CONFIG, ITEM_STATUS, newId, nowIso } from './adapter.j
 
 const STORE_KEY = 'feedwatch_demo_v1';
 const TS_FIELDS = {
-  items: ['fetched_at', 'read_at', 'deleted_at', 'auto_archived_at'],
+  items: ['fetched_at', 'published_at', 'read_at', 'deleted_at', 'auto_archived_at'],
   users: ['created_at', 'last_login', 'last_seen'],
   groups: ['created_at'],
   sources: ['created_at', 'updated_at'],

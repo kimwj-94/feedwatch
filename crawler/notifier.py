@@ -8,12 +8,27 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 
+from datetime import timedelta, timezone
+
 from shared.config import ROOT_DIR, Settings
-from shared.models import Item, User
+from shared.models import Item, User, parse_dt
+
+KST = timezone(timedelta(hours=9))
 
 
 def _esc(value: str) -> str:
     return html.escape(value or "")
+
+
+def _posted_label(item: Item) -> str:
+    """사이트가 알려준 작성 시각이 있으면 제목 옆에 덧붙인다."""
+    if not item.published_at:
+        return ""
+    try:
+        stamp = parse_dt(item.published_at).astimezone(KST).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return ""
+    return f" <span style=\"color:#9a968d;font-size:12px\">({stamp})</span>"
 
 
 def build_email_html(items: list[Item], group_names: dict[str, str] | None = None) -> str:
@@ -31,6 +46,7 @@ def build_email_html(items: list[Item], group_names: dict[str, str] | None = Non
         rows = "".join(
             "<li style=\"margin:8px 0\">"
             f"<a href=\"{_esc(item.url)}\" style=\"color:#6c63ff;text-decoration:none;font-weight:600\">{_esc(item.title)}</a>"
+            f"{_posted_label(item)}"
             "</li>"
             for item in source_items
         )

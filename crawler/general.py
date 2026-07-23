@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 from urllib.parse import urljoin
 
 import feedparser
@@ -16,10 +17,23 @@ UA = {
 FEED_HINTS = ("rss", "atom", "feed+json", "feed+xml")
 
 
-def _make_item(source: Source, title: str, url: str) -> Item:
+def entry_published(entry) -> str | None:
+    """피드가 알려준 글 작성 시각(UTC ISO). 없으면 None."""
+    for key in ("published_parsed", "updated_parsed"):
+        parsed = entry.get(key)
+        if parsed:
+            try:
+                return datetime(*parsed[:6], tzinfo=UTC).isoformat(timespec="seconds")
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def _make_item(source: Source, title: str, url: str, guid: str | None = None, published_at: str | None = None) -> Item:
     return Item(
         id=new_id("item"), source_id=source.id, source_name=source.name,
-        group_ids=list(source.group_ids), title=title, url=url, hash=item_hash(source.id, title, url),
+        group_ids=list(source.group_ids), title=title, url=url,
+        hash=item_hash(source.id, title, url, guid), published_at=published_at,
     )
 
 
@@ -30,7 +44,7 @@ def _parse_feed(source: Source, content: bytes, max_items: int = 30) -> list[Ite
         title = " ".join((entry.get("title") or "").split())
         link = (entry.get("link") or "").strip()
         if title and link:
-            items.append(_make_item(source, title, link))
+            items.append(_make_item(source, title, link, entry.get("id"), entry_published(entry)))
     return items
 
 

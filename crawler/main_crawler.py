@@ -88,13 +88,22 @@ def run(source_filter: str | None = None) -> int:
     success_count = 0
     newly_failing: list[tuple[str, str]] = []  # crossed the failure threshold this run
 
+    # 이번에 처음 수집하는 사이트 — 기존 글이 한꺼번에 '신규'로 잡히므로 알림에서 제외한다.
+    first_time_source_ids = {s.id for s in sources if not s.first_crawl_done}
+
     for index, source in enumerate(sources):
         try:
             collected.extend(crawl_with_retry(source, repository, settings))
             success_count += 1
+            changed = False
             if source.consecutive_failures or source.last_error:
                 source.consecutive_failures = 0
                 source.last_error = None
+                changed = True
+            if not source.first_crawl_done:
+                source.first_crawl_done = True   # 다음 수집부터는 알림을 보낸다
+                changed = True
+            if changed:
                 repository.save_source(source)
         except Exception as exc:
             message = f"{type(exc).__name__}: {exc}"
@@ -112,12 +121,23 @@ def run(source_filter: str | None = None) -> int:
     new_items = repository.add_items_dedup(collected)
     users = repository.list_users()
 
+    # 첫 수집분은 앱에는 담기지만(위에서 이미 저장됨) 메일로는 보내지 않는다.
+    notifiable = [item for item in new_items if item.source_id not in first_time_source_ids]
+    silenced = len(new_items) - len(notifiable)
+
     preview = None
     email_notes: list[str] = []
-    if config.get("email_enabled", True) and new_items:
-        preview, email_notes = notify_new_items(settings, users, new_items, group_names)
-    elif new_items:
-        email_notes.append("설정에서 이메일 알림이 꺼져 있어 발송하지 않았습니다.")
+    if silenced:
+        email_notes.append(
+            f"처음 수집한 사이트의 기존 글 {silenced}건은 알림에서 제외했습니다(앱에서는 보입니다). "
+            "다음 수집부터 새 글만 알려 드립니다."
+        )
+    if not config.get("email_enabled", True):
+        if notifiable:
+            email_notes.append("설정에서 이메일 알림이 꺼져 있어 발송하지 않았습니다.")
+    elif notifiable:
+        preview, notes = notify_new_items(settings, users, notifiable, group_names)
+        email_notes.extend(notes)
     if newly_failing:
         notify_failures(settings, users, newly_failing)
 

@@ -89,7 +89,8 @@
       "group_ids": [
         "group_common",
         "group_dad"
-      ]
+      ],
+      "first_crawl_done": true
     },
     {
       "id": "src_econ_yt",
@@ -109,7 +110,8 @@
       "updated_at": "2026-06-17T03:00:00.000Z",
       "group_ids": [
         "group_dad"
-      ]
+      ],
+      "first_crawl_done": true
     },
     {
       "id": "src_apt_cafe",
@@ -129,7 +131,8 @@
       "updated_at": "2026-06-17T00:00:00.000Z",
       "group_ids": [
         "group_common"
-      ]
+      ],
+      "first_crawl_done": true
     },
     {
       "id": "src_school",
@@ -146,7 +149,8 @@
       "updated_at": "2026-06-16T09:00:00.000Z",
       "group_ids": [
         "group_kids"
-      ]
+      ],
+      "first_crawl_done": true
     },
     {
       "id": "src_mom_blog",
@@ -166,7 +170,8 @@
       "updated_at": "2026-06-16T05:00:00.000Z",
       "group_ids": [
         "group_mom"
-      ]
+      ],
+      "first_crawl_done": true
     },
     {
       "id": "src_intranet",
@@ -188,7 +193,8 @@
       "updated_at": "2026-06-17T00:00:00.000Z",
       "group_ids": [
         "group_dad"
-      ]
+      ],
+      "first_crawl_done": true
     }
   ],
   "credentials": [],
@@ -208,7 +214,8 @@
       "group_ids": [
         "group_common",
         "group_dad"
-      ]
+      ],
+      "published_at": "2026-06-17T03:50:00Z"
     },
     {
       "id": "item_02",
@@ -224,7 +231,8 @@
       "auto_archived_at": null,
       "group_ids": [
         "group_dad"
-      ]
+      ],
+      "published_at": "2026-06-17T02:20:00Z"
     },
     {
       "id": "item_03",
@@ -240,7 +248,8 @@
       "auto_archived_at": null,
       "group_ids": [
         "group_common"
-      ]
+      ],
+      "published_at": "2026-06-16T23:20:00Z"
     },
     {
       "id": "item_04",
@@ -256,7 +265,8 @@
       "auto_archived_at": null,
       "group_ids": [
         "group_kids"
-      ]
+      ],
+      "published_at": "2026-06-16T08:20:00Z"
     },
     {
       "id": "item_05",
@@ -272,7 +282,8 @@
       "auto_archived_at": null,
       "group_ids": [
         "group_mom"
-      ]
+      ],
+      "published_at": "2026-06-16T04:20:00Z"
     },
     {
       "id": "item_06",
@@ -289,7 +300,8 @@
       "group_ids": [
         "group_common",
         "group_dad"
-      ]
+      ],
+      "published_at": "2026-06-15T04:20:00Z"
     },
     {
       "id": "item_07",
@@ -305,7 +317,8 @@
       "auto_archived_at": null,
       "group_ids": [
         "group_dad"
-      ]
+      ],
+      "published_at": "2026-06-14T04:20:00Z"
     },
     {
       "id": "item_08",
@@ -321,7 +334,8 @@
       "auto_archived_at": null,
       "group_ids": [
         "group_common"
-      ]
+      ],
+      "published_at": "2026-06-13T04:20:00Z"
     },
     {
       "id": "item_09",
@@ -337,7 +351,8 @@
       "auto_archived_at": null,
       "group_ids": [
         "group_kids"
-      ]
+      ],
+      "published_at": "2026-06-12T04:20:00Z"
     },
     {
       "id": "item_10",
@@ -353,7 +368,8 @@
       "auto_archived_at": null,
       "group_ids": [
         "group_mom"
-      ]
+      ],
+      "published_at": "2026-06-11T04:20:00Z"
     },
     {
       "id": "item_11",
@@ -370,7 +386,8 @@
       "group_ids": [
         "group_common",
         "group_dad"
-      ]
+      ],
+      "published_at": "2026-06-08T04:20:00Z"
     },
     {
       "id": "item_12",
@@ -386,7 +403,8 @@
       "auto_archived_at": "2026-06-14T05:00:00.000Z",
       "group_ids": [
         "group_dad"
-      ]
+      ],
+      "published_at": "2026-06-07T04:20:00Z"
     },
     {
       "id": "item_13",
@@ -402,7 +420,8 @@
       "auto_archived_at": null,
       "group_ids": [
         "group_common"
-      ]
+      ],
+      "published_at": "2026-06-11T04:20:00Z"
     },
     {
       "id": "item_14",
@@ -418,7 +437,8 @@
       "auto_archived_at": null,
       "group_ids": [
         "group_kids"
-      ]
+      ],
+      "published_at": "2026-06-09T04:20:00Z"
     }
   ],
   "crawl_logs": [

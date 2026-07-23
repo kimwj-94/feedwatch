@@ -30,8 +30,15 @@ def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
 
 
-def item_hash(source_id: str, title: str, url: str) -> str:
-    raw = f"{source_id}|{title.strip()}|{url.strip()}".encode("utf-8")
+def item_hash(source_id: str, title: str, url: str, guid: str | None = None) -> str:
+    """'같은 글인가'를 판단하는 지문.
+
+    기준 우선순위: 피드가 준 고유 ID(guid) > 글 주소 > 제목.
+    제목을 지문에 넣으면 오탈자 하나만 고쳐도 새 글로 잡혀 알림이 다시 가므로 제외한다.
+    주소도 ID도 없는 게시판(선택자 수집)에서만 제목을 쓴다.
+    """
+    key = (guid or "").strip() or url.strip() or title.strip()
+    raw = f"{source_id}|{key}".encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -70,6 +77,9 @@ class Source:
     metadata: dict[str, Any] = field(default_factory=dict)
     consecutive_failures: int = 0
     last_error: str | None = None
+    # 첫 수집인지 여부. 사이트를 새로 등록하면 기존 글이 한꺼번에 '신규'로 잡히는데,
+    # 그걸 전부 메일로 보내면 알림 폭탄이 된다. 첫 수집분은 앱에만 담고 알림은 건너뛴다.
+    first_crawl_done: bool = False
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
 
@@ -93,7 +103,8 @@ class Item:
     url: str
     hash: str
     status: ItemStatus = "new"
-    fetched_at: str = field(default_factory=utc_now)
+    published_at: str | None = None      # 사이트가 알려준 글 작성 시각(없을 수 있음)
+    fetched_at: str = field(default_factory=utc_now)   # 우리가 발견한 시각 — 정렬·미확인 판정 기준
     read_at: str | None = None
     deleted_at: str | None = None
     auto_archived_at: str | None = None
