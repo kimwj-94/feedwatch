@@ -1,0 +1,130 @@
+/* FeedWatch v2.2 — Design tokens (Premium Redesign)
+   Sleek glassmorphism gradients, ultra-soft shadows, and a vibrant color palette. */
+
+/* 외부 폰트(@import)를 쓰지 않습니다 — Inter는 한글 글리프가 없어 한글은 어차피 폴백으로 표시되고,
+   사내·병원망에서 fonts.googleapis.com이 막히면 첫 화면 렌더가 지연됩니다.
+   Inter가 설치된 기기에서는 그대로 쓰이고, 아니면 아래 순서대로 로컬 폰트를 씁니다. */
+:root {
+  --font-sans: "Inter", "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --font-mono: "ui-monospace", "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+
+  /* Smoother, rounder radiuses for a modern app feel */
+  --r-xs: 6px; 
+  --r-sm: 10px; 
+  --r-md: 14px; 
+  --r-lg: 20px; 
+  --r-xl: 28px; 
+  --r-full: 9999px;
+
+  /* Smoother spring animations */
+  --dur-fast: 150ms; 
+  --dur: 250ms; 
+  --dur-slow: 400ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  --sidebar-w: 260px;
+  --topbar-h: 64px;
+
+  /* Semantic Colors */
+  --ok: #10b981; 
+  --warn: #f59e0b; 
+  --danger: #ef4444; 
+  --info: #3b82f6;
+
+  /* Item Status */
+  --status-new: var(--accent);
+  --status-read: #9ca3af;
+  --status-pending: #f59e0b;
+  --status-deleted: #d1d5db;
+
+  /* Avatar/Chip Colors */
+  /* 구분값 팔레트 — 빨·주·노·초·파·남·보 + 회색. 인덱스 순서는 저장값(color_index)이라 바꾸지 말 것. */
+  --chip-0-bg:#fef2f2; --chip-0-fg:#b91c1c;   /* 빨강 */
+  --chip-1-bg:#fff7ed; --chip-1-fg:#c2410c;   /* 주황 */
+  --chip-2-bg:#fefce8; --chip-2-fg:#a16207;   /* 노랑 */
+  --chip-3-bg:#ecfdf5; --chip-3-fg:#047857;   /* 초록 */
+  --chip-4-bg:#eff6ff; --chip-4-fg:#2563eb;   /* 파랑 */
+  --chip-5-bg:#eef2ff; --chip-5-fg:#4f46e5;   /* 남색 */
+  --chip-6-bg:#faf5ff; --chip-6-fg:#9333ea;   /* 보라 */
+  --chip-7-bg:#f1f5f9; --chip-7-fg:#475569;   /* 회색 */
+}
+
+/* Light Theme */
+:root, [data-theme="light"] {
+  --bg: #f8fafc;
+  --bg-grad: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  --surface: rgba(255, 255, 255, 0.85); /* Glass effect */
+  --surface-solid: #ffffff;
+  --surface-2: rgba(255, 255, 255, 0.5);
+  --surface-3: rgba(241, 245, 249, 0.7);
+  --hover: rgba(15, 23, 42, 0.04);
+  --active: rgba(15, 23, 42, 0.08);
+  --border: rgba(226, 232, 240, 0.8);
+  --border-2: rgba(203, 213, 225, 0.8);
+  --border-strong: rgba(148, 163, 184, 0.6);
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #64748b;   /* 보조 텍스트(시간·출처·URL·힌트). 흰 배경 대비 4.7:1 — WCAG AA 충족 */
+  --on-accent: #ffffff;
+  
+  /* Ultra-soft layered shadows */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-pop: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --scrim: rgba(15, 23, 42, 0.3);
+  color-scheme: light;
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  --bg: #0b0f19;
+  --bg-grad: linear-gradient(135deg, #0b0f19 0%, #111827 100%);
+  --surface: rgba(30, 41, 59, 0.75);
+  --surface-solid: #1e293b;
+  --surface-2: rgba(15, 23, 42, 0.6);
+  --surface-3: rgba(51, 65, 85, 0.5);
+  --hover: rgba(255, 255, 255, 0.06);
+  --active: rgba(255, 255, 255, 0.1);
+  --border: rgba(51, 65, 85, 0.6);
+  --border-2: rgba(71, 85, 105, 0.6);
+  --border-strong: rgba(100, 116, 139, 0.6);
+  --text: #f8fafc;
+  --text-2: #cbd5e1;
+  --text-3: #94a3b8;   /* 다크에서는 반대로 밝게 — 카드(#1e293b) 대비 5.7:1 */
+  --on-accent: #ffffff;
+  
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.5);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6);
+  --shadow-pop: 0 25px 30px -10px rgb(0 0 0 / 0.8);
+  --scrim: rgba(0, 0, 0, 0.7);
+  color-scheme: dark;
+
+  --chip-0-bg:#450a0a; --chip-0-fg:#fca5a5;   /* 빨강 */
+  --chip-1-bg:#431407; --chip-1-fg:#fdba74;   /* 주황 */
+  --chip-2-bg:#422006; --chip-2-fg:#fde047;   /* 노랑 */
+  --chip-3-bg:#064e3b; --chip-3-fg:#6ee7b7;   /* 초록 */
+  --chip-4-bg:#172554; --chip-4-fg:#93c5fd;   /* 파랑 */
+  --chip-5-bg:#1e1b4b; --chip-5-fg:#a5b4fc;   /* 남색 */
+  --chip-6-bg:#3b0764; --chip-6-fg:#d8b4fe;   /* 보라 */
+  --chip-7-bg:#1e293b; --chip-7-fg:#cbd5e1;   /* 회색 */
+}
+
+/* Accents */
+[data-accent="indigo"]  { --accent:#6366f1; --accent-2:#818cf8; --accent-press:#4f51d8; }
+[data-accent="violet"]  { --accent:#8b5cf6; --accent-2:#a78bfa; --accent-press:#7c3aed; }
+[data-accent="blue"]    { --accent:#2563eb; --accent-2:#60a5fa; --accent-press:#1d4ed8; }
+[data-accent="emerald"] { --accent:#10b981; --accent-2:#34d399; --accent-press:#059669; }
+[data-accent="rose"]    { --accent:#f43f5e; --accent-2:#fb7185; --accent-press:#e11d48; }
+[data-accent="amber"]   { --accent:#f59e0b; --accent-2:#fbbf24; --accent-press:#d97706; }
+
+:root { --accent:#6366f1; --accent-2:#818cf8; --accent-press:#4f51d8; }
+:root {
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-softer: color-mix(in srgb, var(--accent) 6%, transparent);
+}

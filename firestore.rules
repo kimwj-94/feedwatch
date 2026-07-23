@@ -1,0 +1,82 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // 승인된 가족 = users 컬렉션에 본인 uid 문서가 있는 사용자
+    function isMember() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return isMember()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    function ownsUser(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    // 본인이 직접 바꿀 수 있는 필드(표시이름·알림 설정)만 허용
+    function onlyProfileFields() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(["name", "notify_email", "notify_sources", "last_seen", "last_login"]);
+    }
+
+    // 로그인 게이트가 승인 여부를 확인해야 하므로 users 읽기는 로그인 사용자에 허용
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (ownsUser(userId) && onlyProfileFields());
+    }
+
+    // 모니터링 콘텐츠: 승인된 가족은 누구나 추가/수정/삭제 (메인 PC 불필요)
+    match /groups/{groupId} {
+      allow read, create, update, delete: if isMember();
+    }
+    match /sources/{sourceId} {
+      allow read, create, update, delete: if isMember();
+    }
+    match /items/{itemId} {
+      allow read: if isMember();
+      allow delete: if isMember();                 // 휴지통 완전삭제
+      allow create: if isAdmin();                  // 신규 수집은 크롤러(Admin SDK)
+      allow update: if isMember()                  // 읽음/삭제/보관 상태 전환
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(["status", "read_at", "deleted_at", "auto_archived_at"]);
+    }
+
+    match /crawl_logs/{logId} {
+      allow read: if isMember();
+      allow create, update, delete: if isAdmin();  // 크롤러 Admin SDK
+    }
+
+    // 앱 설정(자동 보관일수·이메일) — 관리자만
+    match /app_config/{doc} {
+      allow read: if isMember();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 가입 신청: 본인 이메일로만 신청/조회, 승인·거절은 관리자
+    // 문서 ID는 신청자 uid(req_<uid>)라 재로그인해도 신청이 중복되지 않는다.
+    match /access_requests/{reqId} {
+      allow create: if signedIn() && request.resource.data.email == request.auth.token.email;
+      allow read: if isAdmin() || (signedIn() && resource.data.email == request.auth.token.email);
+      allow update: if isAdmin()
+        || (signedIn()
+            && resource.data.email == request.auth.token.email
+            && request.resource.data.email == request.auth.token.email
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(["name", "provider", "requested_at", "uid"]));
+      allow delete: if isAdmin();
+    }
+
+    // 로그인 사이트 자격증명: 관리자만 '쓰기'(이미 암호화된 값 저장). '읽기'는 차단(복호화는 크롤러 Admin SDK 전용).
+    match /credentials/{credentialId} {
+      allow read: if false;
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

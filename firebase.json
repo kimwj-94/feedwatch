@@ -1,0 +1,22 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": "web",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      { "source": "**", "destination": "/index.html" }
+    ],
+    "headers": [
+      {
+        "source": "**/*.@(js|css|svg|webmanifest)",
+        "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }]
+      },
+      {
+        "source": "/firebase_config.json",
+        "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+      }
+    ]
+  }
+}

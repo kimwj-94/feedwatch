@@ -1,0 +1,5 @@
+# v1.0 데스크톱(CustomTkinter) 보존본 전용 의존성.
+# 현행 v2는 루트 requirements.txt(크롤러/백엔드) + web/(무빌드 웹앱)만 쓴다.
+-r ../../requirements.txt
+customtkinter>=5.2.2
+pyinstaller>=6.7.0

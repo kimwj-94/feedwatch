@@ -1,0 +1,13 @@
+.env
+firebase_config.json
+service_account.json
+token.json
+data/*.json
+data/*.html
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/
+*.spec
+playwright-report/

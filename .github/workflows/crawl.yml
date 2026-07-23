@@ -1,0 +1,41 @@
+name: FeedWatch Crawl
+
+on:
+  schedule:
+    # 06:00 / 18:00 KST = 21:00 / 09:00 UTC
+    - cron: "0 21,9 * * *"
+  workflow_dispatch:
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Write service account key
+        env:
+          SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: printf '%s' "$SERVICE_ACCOUNT_JSON" > service_account.json
+      - name: Run crawler
+        env:
+          FEEDWATCH_STORAGE: firestore
+          FEEDWATCH_ADMIN_EMAIL: ${{ secrets.FEEDWATCH_ADMIN_EMAIL }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: service_account.json
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          FEEDWATCH_CRED_PASSPHRASE: ${{ secrets.FEEDWATCH_CRED_PASSPHRASE }}
+          EMAIL_PROVIDER: ${{ vars.EMAIL_PROVIDER || 'smtp' }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+        run: python -m crawler.main_crawler

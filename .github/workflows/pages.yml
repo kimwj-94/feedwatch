@@ -1,0 +1,54 @@
+name: Deploy web app (GitHub Pages)
+
+# web/ 폴더(무빌드 정적 앱)를 GitHub Pages로 배포한다.
+# 저장소 Settings → Pages → Source 를 "GitHub Actions"로 한 번 지정해 두면 된다.
+# DB·로그인은 Firebase(Firestore + Auth)를 그대로 쓰고, 이 워크플로는 화면만 올린다.
+
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Firebase 웹 설정. 저장소에 web/firebase_config.json을 커밋해 뒀으면 그대로 쓰고,
+      # 커밋하지 않았다면 저장소 변수 FIREBASE_WEB_CONFIG(Settings → Variables)에서 만들어 넣는다.
+      # 이 값들은 비밀이 아니다(보안은 firestore.rules + 로그인으로 보장).
+      - name: Prepare Firebase web config
+        env:
+          FIREBASE_WEB_CONFIG: ${{ vars.FIREBASE_WEB_CONFIG }}
+        run: |
+          if [ -n "$FIREBASE_WEB_CONFIG" ]; then
+            printf '%s' "$FIREBASE_WEB_CONFIG" > web/firebase_config.json
+            echo "저장소 변수 FIREBASE_WEB_CONFIG로 설정 파일을 만들었습니다."
+          fi
+          if [ ! -s web/firebase_config.json ]; then
+            echo "::error::web/firebase_config.json이 없습니다. 파일을 커밋하거나 저장소 변수 FIREBASE_WEB_CONFIG를 등록하세요. (이대로 배포하면 데모 모드로 뜹니다)"
+            exit 1
+          fi
+          python -c "import json,sys; c=json.load(open('web/firebase_config.json',encoding='utf-8')); sys.exit(0 if c.get('apiKey') and c.get('projectId') else 'apiKey/projectId가 비어 있습니다')"
+          echo "설정 확인 완료."
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4

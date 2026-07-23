@@ -1,0 +1,14 @@
+{
+  "name": "FeedWatch — 가족 통합 모니터링",
+  "short_name": "FeedWatch",
+  "description": "여러 웹사이트·유튜브·네이버의 새 글을 한 곳에서 확인하는 가족 통합 모니터링 대시보드",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#0e1018",
+  "theme_color": "#4f46e5",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

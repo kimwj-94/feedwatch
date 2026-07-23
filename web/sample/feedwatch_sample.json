@@ -1,0 +1,477 @@
+{
+  "_generated_at": "2026-06-17T05:00:00.000Z",
+  "_note": "FeedWatch 데모 데이터. 부팅 시 모든 시각이 현재 기준으로 자동 재정렬됩니다(local.js).",
+  "app_config": {
+    "auto_archive_days": 7,
+    "trash_retention_days": 30,
+    "email_enabled": true,
+    "email_provider": ""
+  },
+  "users": [
+    {
+      "id": "user_admin",
+      "name": "김우재",
+      "email": "admin@example.com",
+      "role": "admin",
+      "notify_email": true,
+      "notify_sources": [],
+      "created_at": "2026-06-01T00:00:00.000Z",
+      "last_login": "2026-06-17T04:50:00.000Z",
+      "last_seen": "2026-06-17T02:00:00.000Z"
+    },
+    {
+      "id": "user_mom",
+      "name": "이수민",
+      "email": "mom@example.com",
+      "role": "member",
+      "notify_email": true,
+      "notify_sources": [
+        "src_apt_cafe",
+        "src_mom_blog"
+      ],
+      "created_at": "2026-06-01T00:00:00.000Z",
+      "last_login": "2026-06-16T22:10:00.000Z",
+      "last_seen": "2026-06-16T12:00:00.000Z"
+    },
+    {
+      "id": "user_kid",
+      "name": "김하늘",
+      "email": "kid@example.com",
+      "role": "member",
+      "notify_email": false,
+      "notify_sources": [
+        "src_school"
+      ],
+      "created_at": "2026-06-02T00:00:00.000Z",
+      "last_login": null
+    }
+  ],
+  "groups": [
+    {
+      "id": "group_common",
+      "name": "공통",
+      "order": 1,
+      "created_at": "2026-06-01T00:00:00.000Z"
+    },
+    {
+      "id": "group_dad",
+      "name": "아빠",
+      "order": 2,
+      "created_at": "2026-06-01T00:00:00.000Z"
+    },
+    {
+      "id": "group_mom",
+      "name": "엄마",
+      "order": 3,
+      "created_at": "2026-06-01T00:00:00.000Z"
+    },
+    {
+      "id": "group_kids",
+      "name": "자녀",
+      "order": 4,
+      "created_at": "2026-06-02T00:00:00.000Z"
+    }
+  ],
+  "sources": [
+    {
+      "id": "src_hospital",
+      "name": "연세의료원 공지",
+      "url": "https://example.com/hospital/notice",
+      "type": "general",
+      "selector": ".board-list .title a",
+      "active": true,
+      "credential_id": null,
+      "metadata": {},
+      "consecutive_failures": 0,
+      "last_error": null,
+      "created_at": "2026-06-01T00:00:00.000Z",
+      "updated_at": "2026-06-17T00:00:00.000Z",
+      "group_ids": [
+        "group_common",
+        "group_dad"
+      ]
+    },
+    {
+      "id": "src_econ_yt",
+      "name": "경제읽어주는남자",
+      "url": "https://www.youtube.com/@example-econ",
+      "type": "youtube",
+      "selector": "",
+      "active": true,
+      "credential_id": null,
+      "metadata": {
+        "channel_id": "",
+        "max_items": 10
+      },
+      "consecutive_failures": 0,
+      "last_error": null,
+      "created_at": "2026-06-03T00:00:00.000Z",
+      "updated_at": "2026-06-17T03:00:00.000Z",
+      "group_ids": [
+        "group_dad"
+      ]
+    },
+    {
+      "id": "src_apt_cafe",
+      "name": "행복아파트 입주민카페",
+      "url": "https://cafe.naver.com/example-apt",
+      "type": "naver",
+      "selector": "",
+      "active": true,
+      "credential_id": null,
+      "metadata": {
+        "iframe_selector": "iframe#cafe_main",
+        "max_items": 30
+      },
+      "consecutive_failures": 0,
+      "last_error": null,
+      "created_at": "2026-06-04T00:00:00.000Z",
+      "updated_at": "2026-06-17T00:00:00.000Z",
+      "group_ids": [
+        "group_common"
+      ]
+    },
+    {
+      "id": "src_school",
+      "name": "햇살초등학교 가정통신문",
+      "url": "https://example.com/school/letters",
+      "type": "general",
+      "selector": ".notice a",
+      "active": true,
+      "credential_id": null,
+      "metadata": {},
+      "consecutive_failures": 0,
+      "last_error": null,
+      "created_at": "2026-06-04T00:00:00.000Z",
+      "updated_at": "2026-06-16T09:00:00.000Z",
+      "group_ids": [
+        "group_kids"
+      ]
+    },
+    {
+      "id": "src_mom_blog",
+      "name": "엄마 요리블로그",
+      "url": "https://blog.naver.com/example-cook",
+      "type": "naver",
+      "selector": "",
+      "active": true,
+      "credential_id": null,
+      "metadata": {
+        "rss_url": "",
+        "max_items": 20
+      },
+      "consecutive_failures": 0,
+      "last_error": null,
+      "created_at": "2026-06-05T00:00:00.000Z",
+      "updated_at": "2026-06-16T05:00:00.000Z",
+      "group_ids": [
+        "group_mom"
+      ]
+    },
+    {
+      "id": "src_intranet",
+      "name": "사내 인트라넷 공지",
+      "url": "https://intranet.example.com/board",
+      "type": "login_required",
+      "selector": ".board-list .title a",
+      "active": true,
+      "credential_id": null,
+      "metadata": {
+        "username_selector": "#user_id",
+        "password_selector": "#user_pw",
+        "submit_selector": "button[type=submit]",
+        "post_login_wait_selector": ".board-list"
+      },
+      "consecutive_failures": 3,
+      "last_error": "RuntimeError: 로그인 필요 사이트에는 암호화된 로그인 정보가 필요합니다.",
+      "created_at": "2026-06-06T00:00:00.000Z",
+      "updated_at": "2026-06-17T00:00:00.000Z",
+      "group_ids": [
+        "group_dad"
+      ]
+    }
+  ],
+  "credentials": [],
+  "items": [
+    {
+      "id": "item_01",
+      "source_id": "src_hospital",
+      "source_name": "연세의료원 공지",
+      "title": "2026년 하반기 직원 건강검진 시행 안내",
+      "url": "https://example.com/hospital/notice/2201",
+      "hash": "h01",
+      "status": "new",
+      "fetched_at": "2026-06-17T04:30:00.000Z",
+      "read_at": null,
+      "deleted_at": null,
+      "auto_archived_at": null,
+      "group_ids": [
+        "group_common",
+        "group_dad"
+      ]
+    },
+    {
+      "id": "item_02",
+      "source_id": "src_econ_yt",
+      "source_name": "경제읽어주는남자",
+      "title": "하반기 기준금리 전망과 내 집 마련 전략",
+      "url": "https://www.youtube.com/watch?v=demo002",
+      "hash": "h02",
+      "status": "new",
+      "fetched_at": "2026-06-17T03:00:00.000Z",
+      "read_at": null,
+      "deleted_at": null,
+      "auto_archived_at": null,
+      "group_ids": [
+        "group_dad"
+      ]
+    },
+    {
+      "id": "item_03",
+      "source_id": "src_apt_cafe",
+      "source_name": "행복아파트 입주민카페",
+      "title": "7월 관리비 고지서 및 정기소독 일정 안내",
+      "url": "https://cafe.naver.com/example-apt/3312",
+      "hash": "h03",
+      "status": "new",
+      "fetched_at": "2026-06-17T00:00:00.000Z",
+      "read_at": null,
+      "deleted_at": null,
+      "auto_archived_at": null,
+      "group_ids": [
+        "group_common"
+      ]
+    },
+    {
+      "id": "item_04",
+      "source_id": "src_school",
+      "source_name": "햇살초등학교 가정통신문",
+      "title": "여름방학 돌봄교실 신청 안내 (가정통신문)",
+      "url": "https://example.com/school/letters/884",
+      "hash": "h04",
+      "status": "new",
+      "fetched_at": "2026-06-16T09:00:00.000Z",
+      "read_at": null,
+      "deleted_at": null,
+      "auto_archived_at": null,
+      "group_ids": [
+        "group_kids"
+      ]
+    },
+    {
+      "id": "item_05",
+      "source_id": "src_mom_blog",
+      "source_name": "엄마 요리블로그",
+      "title": "초간단 여름 비빔국수 레시피 (10분 완성)",
+      "url": "https://blog.naver.com/example-cook/2203",
+      "hash": "h05",
+      "status": "new",
+      "fetched_at": "2026-06-16T05:00:00.000Z",
+      "read_at": null,
+      "deleted_at": null,
+      "auto_archived_at": null,
+      "group_ids": [
+        "group_mom"
+      ]
+    },
+    {
+      "id": "item_06",
+      "source_id": "src_hospital",
+      "source_name": "연세의료원 공지",
+      "title": "직원 주차장 보수공사에 따른 임시 주차 안내",
+      "url": "https://example.com/hospital/notice/2198",
+      "hash": "h06",
+      "status": "new",
+      "fetched_at": "2026-06-15T05:00:00.000Z",
+      "read_at": null,
+      "deleted_at": null,
+      "auto_archived_at": null,
+      "group_ids": [
+        "group_common",
+        "group_dad"
+      ]
+    },
+    {
+      "id": "item_07",
+      "source_id": "src_econ_yt",
+      "source_name": "경제읽어주는남자",
+      "title": "환율 급등, 지금 달러 사도 될까? 3가지 체크포인트",
+      "url": "https://www.youtube.com/watch?v=demo007",
+      "hash": "h07",
+      "status": "new",
+      "fetched_at": "2026-06-14T05:00:00.000Z",
+      "read_at": null,
+      "deleted_at": null,
+      "auto_archived_at": null,
+      "group_ids": [
+        "group_dad"
+      ]
+    },
+    {
+      "id": "item_08",
+      "source_id": "src_apt_cafe",
+      "source_name": "행복아파트 입주민카페",
+      "title": "재활용 분리수거 요일 변경 공지 (월→수)",
+      "url": "https://cafe.naver.com/example-apt/3301",
+      "hash": "h08",
+      "status": "read",
+      "fetched_at": "2026-06-13T05:00:00.000Z",
+      "read_at": "2026-06-14T05:00:00.000Z",
+      "deleted_at": null,
+      "auto_archived_at": null,
+      "group_ids": [
+        "group_common"
+      ]
+    },
+    {
+      "id": "item_09",
+      "source_id": "src_school",
+      "source_name": "햇살초등학교 가정통신문",
+      "title": "현장학습 사전 동의서 제출 안내",
+      "url": "https://example.com/school/letters/879",
+      "hash": "h09",
+      "status": "read",
+      "fetched_at": "2026-06-12T05:00:00.000Z",
+      "read_at": "2026-06-13T05:00:00.000Z",
+      "deleted_at": null,
+      "auto_archived_at": null,
+      "group_ids": [
+        "group_kids"
+      ]
+    },
+    {
+      "id": "item_10",
+      "source_id": "src_mom_blog",
+      "source_name": "엄마 요리블로그",
+      "title": "에어프라이어 닭다리 황금레시피",
+      "url": "https://blog.naver.com/example-cook/2191",
+      "hash": "h10",
+      "status": "read",
+      "fetched_at": "2026-06-11T05:00:00.000Z",
+      "read_at": "2026-06-12T05:00:00.000Z",
+      "deleted_at": null,
+      "auto_archived_at": null,
+      "group_ids": [
+        "group_mom"
+      ]
+    },
+    {
+      "id": "item_11",
+      "source_id": "src_hospital",
+      "source_name": "연세의료원 공지",
+      "title": "정보보안 의무교육 이수 마감 임박 안내",
+      "url": "https://example.com/hospital/notice/2180",
+      "hash": "h11",
+      "status": "archived_unread",
+      "fetched_at": "2026-06-08T05:00:00.000Z",
+      "read_at": null,
+      "deleted_at": null,
+      "auto_archived_at": "2026-06-15T05:00:00.000Z",
+      "group_ids": [
+        "group_common",
+        "group_dad"
+      ]
+    },
+    {
+      "id": "item_12",
+      "source_id": "src_econ_yt",
+      "source_name": "경제읽어주는남자",
+      "title": "미리 준비하는 연말정산 절세 꿀팁 7가지",
+      "url": "https://www.youtube.com/watch?v=demo012",
+      "hash": "h12",
+      "status": "archived_unread",
+      "fetched_at": "2026-06-07T05:00:00.000Z",
+      "read_at": null,
+      "deleted_at": null,
+      "auto_archived_at": "2026-06-14T05:00:00.000Z",
+      "group_ids": [
+        "group_dad"
+      ]
+    },
+    {
+      "id": "item_13",
+      "source_id": "src_apt_cafe",
+      "source_name": "행복아파트 입주민카페",
+      "title": "공동 택배함 이용 관련 협조 요청",
+      "url": "https://cafe.naver.com/example-apt/3288",
+      "hash": "h13",
+      "status": "deleted",
+      "fetched_at": "2026-06-11T05:00:00.000Z",
+      "read_at": null,
+      "deleted_at": "2026-06-13T05:00:00.000Z",
+      "auto_archived_at": null,
+      "group_ids": [
+        "group_common"
+      ]
+    },
+    {
+      "id": "item_14",
+      "source_id": "src_school",
+      "source_name": "햇살초등학교 가정통신문",
+      "title": "봄 운동회 우천 순연 안내",
+      "url": "https://example.com/school/letters/870",
+      "hash": "h14",
+      "status": "deleted",
+      "fetched_at": "2026-06-09T05:00:00.000Z",
+      "read_at": null,
+      "deleted_at": "2026-06-12T05:00:00.000Z",
+      "auto_archived_at": null,
+      "group_ids": [
+        "group_kids"
+      ]
+    }
+  ],
+  "crawl_logs": [
+    {
+      "id": "log_01",
+      "run_at": "2026-06-17T00:00:00.000Z",
+      "total_sources": 6,
+      "success_count": 5,
+      "fail_count": 1,
+      "new_items_count": 3,
+      "failed_sources": [
+        "src_intranet"
+      ],
+      "error_messages": {
+        "src_intranet": "RuntimeError: 로그인 필요 사이트에는 암호화된 로그인 정보가 필요합니다."
+      },
+      "duration_seconds": 42.3
+    },
+    {
+      "id": "log_02",
+      "run_at": "2026-06-16T12:00:00.000Z",
+      "total_sources": 6,
+      "success_count": 5,
+      "fail_count": 1,
+      "new_items_count": 2,
+      "failed_sources": [
+        "src_intranet"
+      ],
+      "error_messages": {
+        "src_intranet": "RuntimeError: 로그인 필요 사이트에는 암호화된 로그인 정보가 필요합니다."
+      },
+      "duration_seconds": 39.7
+    },
+    {
+      "id": "log_03",
+      "run_at": "2026-06-16T00:00:00.000Z",
+      "total_sources": 5,
+      "success_count": 5,
+      "fail_count": 0,
+      "new_items_count": 4,
+      "failed_sources": [],
+      "error_messages": {},
+      "duration_seconds": 31.2
+    }
+  ],
+  "access_requests": [
+    {
+      "id": "req_demo1",
+      "email": "uncle@example.com",
+      "name": "박삼촌",
+      "provider": "google",
+      "requested_at": "2026-06-17T01:30:00.000Z",
+      "status": "pending"
+    }
+  ]
+}
