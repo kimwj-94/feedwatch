@@ -150,7 +150,10 @@ export class LocalAdapter extends Adapter {
   async approveRequest(id, opts = {}) {
     const req = (this.data.access_requests || []).find(r => r.id === id);
     if (!req) return null;
-    const user = await this.saveUser({ id: req.uid || '', email: req.email, name: req.name, role: opts.role || 'member', notify_email: true, notify_sources: [] });
+    // 이미 등록된 계정이면 권한을 건드리지 않고 신청만 정리한다(클라우드와 동일 동작).
+    const email = (req.email || '').toLowerCase();
+    const existing = this.data.users.find(u => u.id === req.uid || (u.email || '').toLowerCase() === email);
+    const user = existing || await this.saveUser({ id: req.uid || '', email: req.email, name: req.name, role: opts.role || 'member', notify_email: true, notify_sources: [] });
     this.data.access_requests = this.data.access_requests.filter(r => r.id !== id);
     this._commit();
     return user;

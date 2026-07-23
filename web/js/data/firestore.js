@@ -176,12 +176,24 @@ export class CloudAdapter extends Adapter {
     await this._set('access_requests', req.id, req);
     return req;
   }
+  // 이미 등록된 사람의 신청인지 판별(본인 신청이 남아 있는 경우 등)
+  _registeredFor(req) {
+    const email = (req.email || '').toLowerCase();
+    return this.cache.users.find(u => u.id === req.uid || (u.email || '').toLowerCase() === email) || null;
+  }
   async approveRequest(id, opts = {}) {
     const req = this.cache.access_requests.find(r => r.id === id);
     if (!req) return null;
     // Key the user doc by the requester's auth uid so Firestore rules (uid-based) recognize them.
     if (!req.uid) throw new Error('이 신청에는 로그인 계정 UID가 없어 승인할 수 없습니다. 신청자가 다시 로그인한 뒤 승인하세요.');
-    const user = await this.saveUser({ id: req.uid, email: req.email, name: req.name, role: opts.role || 'member', notify_email: true, notify_sources: [] });
+    // 이미 등록된 계정이면 권한을 절대 건드리지 않고 신청만 정리한다.
+    // (예전에는 role을 member로 덮어써서, 관리자가 자기 신청을 승인하면 스스로 강등되고
+    //  그 직후 관리자 권한이 없어져 신청 삭제까지 실패하는 악순환이 있었다.)
+    const existing = this._registeredFor(req);
+    const user = existing || await this.saveUser({
+      id: req.uid, email: req.email, name: req.name,
+      role: opts.role || 'member', notify_email: true, notify_sources: [],
+    });
     await this._del('access_requests', id);
     return user;
   }

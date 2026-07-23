@@ -71,6 +71,13 @@ export function mountApp(root, ctx) {
   function themeIcon() { const p = ctx.theme.pref(); return p === 'light' ? 'sun' : p === 'dark' ? 'moon' : 'monitor'; }
   function cycleTheme() { ctx.theme.cycle(); themeBtn.replaceChildren(icon(themeIcon())); themeBtn.setAttribute('aria-label', '테마'); }
   function groupMap() { const m = {}; data.groups.forEach(g => m[g.id] = g); return m; }
+  // 이미 등록된 사람의 신청(승인 절차를 거치지 않고 등록된 첫 관리자 등)은 '대기'가 아니다.
+  function isRegistered(r) {
+    const email = (r.email || '').toLowerCase();
+    return data.users.some(u => u.id === r.uid || (u.email || '').toLowerCase() === email);
+  }
+  function openRequests() { return data.requests.filter(r => (r.status || 'pending') === 'pending' && !isRegistered(r)); }
+  function staleRequests() { return data.requests.filter(r => (r.status || 'pending') === 'pending' && isRegistered(r)); }
   function count(statuses) { return data.items.filter(it => statuses.includes(it.status)).length; }
 
   /* ---------- sidebar nav ---------- */
@@ -85,7 +92,7 @@ export function mountApp(root, ctx) {
     const manageItems = Object.entries(MANAGE_VIEWS)
       .filter(([, v]) => !v.adminOnly || isAdmin)
       .map(([id, v]) => {
-        const badge = id === 'requests' ? data.requests.filter(r => (r.status || 'pending') === 'pending').length : null;
+        const badge = id === 'requests' ? openRequests().length : null;
         return navItem(id, v.label, v.icon, badge || null, id === 'requests' && badge > 0);
       });
 
@@ -666,14 +673,23 @@ export function mountApp(root, ctx) {
 
   /* ---------- MANAGE: requests ---------- */
   function renderRequests(panel) {
-    const pending = data.requests.filter(r => (r.status || 'pending') === 'pending');
+    const pending = openRequests();
+    const stale = staleRequests();
     const pl = p => p === 'google' ? 'Google' : (p === 'password' ? '이메일' : (p || '기타'));
     const rows = pending.length ? pending.map(r => el('div', { class: 'row' }, [
       el('span', { class: 'avatar avatar--sm chip--g3', 'aria-hidden': 'true', text: (r.name || r.email || '?').trim().charAt(0) }),
       el('div', { class: 'row__main' }, [el('div', { class: 'row__title' }, [r.name || r.email, el('span', { class: 'tag', text: pl(r.provider) })]), el('div', { class: 'row__sub', text: `${r.email} · ${relativeTime(r.requested_at)} 신청` })]),
       el('div', { class: 'row__actions' }, [el('button', { class: 'btn btn--primary btn--sm', onclick: async () => { await adapter.approveRequest(r.id, { role: 'member' }); toast(`${r.name || r.email} 님을 승인했습니다.`, { variant: 'success' }); } }, [icon('check'), '승인']), iconBtn('x', '거절', async () => { if (await confirmDialog({ title: '가입 신청 거절', message: `${r.name || r.email} 님의 신청을 거절할까요?`, confirmLabel: '거절', danger: true })) { await adapter.deleteRequest(r.id); toast('거절했습니다.'); } }, 'btn--icon btn--subtle btn--sm')]),
     ])) : [emptyState('대기 중인 가입 신청이 없어요', '미등록 계정이 로그인하면 신청이 여기에 표시됩니다.', 'user')];
-    mount(panel, el('div', { class: 'card', style: { maxWidth: '680px' } }, [el('h2', { class: 'card__title', text: `가입 신청 (${pending.length})` }), el('div', { class: 'banner' }, [icon('user'), '승인하면 구성원으로 추가됩니다. 관리자 권한은 사용자 관리에서 바꿀 수 있어요.']), el('div', { class: 'rows', style: { marginTop: '14px' } }, rows)]));
+    const staleBar = stale.length ? el('div', { class: 'banner banner--warn', style: { marginTop: '12px' } }, [
+      icon('alert'),
+      el('span', { style: { flex: '1' }, text: `이미 가입된 계정의 오래된 신청 ${stale.length}건이 남아 있습니다(${stale.map(r => r.email).join(', ')}). 승인·거절할 필요 없이 정리하면 됩니다.` }),
+      el('button', { class: 'btn btn--subtle btn--sm', onclick: async () => {
+        for (const r of stale) { try { await adapter.deleteRequest(r.id); } catch (e) { toast(e.message || '정리에 실패했습니다.', { variant: 'danger' }); return; } }
+        toast(`${stale.length}건을 정리했습니다.`, { variant: 'success' });
+      } }, ['정리']),
+    ]) : null;
+    mount(panel, el('div', { class: 'card', style: { maxWidth: '680px' } }, [el('h2', { class: 'card__title', text: `가입 신청 (${pending.length})` }), el('div', { class: 'banner' }, [icon('user'), '승인하면 구성원으로 추가됩니다. 관리자 권한은 사용자 관리에서 바꿀 수 있어요.']), staleBar, el('div', { class: 'rows', style: { marginTop: '14px' } }, rows)]));
   }
 
   /* ---------- MANAGE: logs ---------- */
