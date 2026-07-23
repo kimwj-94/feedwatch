@@ -99,13 +99,20 @@ SMTP 실패 시 사유 노출.
 
 GitHub 저장소 **Settings → Secrets and variables → Actions → Secrets** 에 등록:
 
-| Secret | 값 |
-|---|---|
-| `FIREBASE_PROJECT_ID` | Firebase 프로젝트 ID |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | 콘솔 → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 → **JSON 파일 내용 전체** |
-| `FEEDWATCH_ADMIN_EMAIL` | 관리자 이메일 |
-| `SMTP_HOST` `SMTP_PORT` `SMTP_USERNAME` `SMTP_PASSWORD` `SMTP_FROM` | 메일 발송(Gmail이면 앱 비밀번호) |
-| `FEEDWATCH_CRED_PASSPHRASE` | (로그인 필요 사이트를 쓸 때만) 웹에서 정한 '수집 비밀번호' |
+| Secret | 값 | 상태 |
+|---|---|---|
+| `FIREBASE_PROJECT_ID` | Firebase 프로젝트 ID | ✅ 등록됨 |
+| `FEEDWATCH_ADMIN_EMAIL` | 관리자 이메일 | ✅ 등록됨 |
+| `SMTP_HOST` `SMTP_PORT` `SMTP_USERNAME` `SMTP_FROM` | Gmail 기준 값 | ✅ 등록됨 |
+| **`SMTP_PASSWORD`** | Google 계정 **앱 비밀번호 16자리** | ⬜ **직접 입력 필요** |
+| **`FIREBASE_SERVICE_ACCOUNT_JSON`** | 콘솔 → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 → **JSON 내용 전체** | ⬜ **직접 입력 필요** |
+| `FEEDWATCH_CRED_PASSPHRASE` | (로그인 필요 사이트를 쓸 때만) 웹에서 정한 '수집 비밀번호' | ⬜ 해당 시 |
+
+> 남은 두 개는 자격증명이라 직접 넣으셔야 합니다.
+> **앱 비밀번호**: Google 계정 → 보안 → 2단계 인증을 켠 뒤 '앱 비밀번호' 생성(16자리).
+> 일반 로그인 비밀번호로는 SMTP 인증이 되지 않습니다.
+> 다른 메일을 쓰려면 `SMTP_HOST`·`SMTP_PORT`·`SMTP_USERNAME`·`SMTP_FROM`도 함께 바꾸세요
+> (네이버 = `smtp.naver.com` / `465`, 메일 설정에서 SMTP 사용을 먼저 켜야 함).
 
 등록 후 **Actions → FeedWatch Crawl → Run workflow** 로 1회 수동 실행 → 앱에서 새 글 확인.
 
@@ -159,6 +166,12 @@ pip install -r requirements.txt
   크롤러를 직접·예약 실행해야 합니다
 - **새 사이트를 추가해도 기존 구성원은 자동 구독되지 않습니다**(명시 선택 방식의 결과).
   원하면 "새 사이트 자동 포함" 옵션을 추가할 수 있습니다
+- **새 글 판별은 지문(해시) 대조**입니다 — 기준은 `사이트ID + (피드 고유ID > 주소 > 제목)`.
+  날짜를 보지 않으므로 사이트가 날짜를 안 줘도 동작하지만, **게시판 주소 체계가 개편되면**
+  기존 글이 대량 재알림될 수 있습니다. 그럴 땐 해당 사이트를 지웠다 다시 등록하면
+  첫 수집으로 취급돼 알림 없이 재수집됩니다
+- **한 번에 보는 목록 상한**: 일반·네이버 30건, 유튜브 15건. 하루 2회 수집 사이에
+  이보다 많은 글이 올라오는 사이트는 놓칠 수 있습니다(고급 설정에서 조정 가능)
 - **Firestore 읽기 비용** — 크롤 1회당 `items` 전체를 3번 읽습니다(중복제거·자동보관·휴지통정리).
   가족 규모에서는 무료 한도 안이지만, 글이 수천 건 쌓이면 손볼 지점입니다
 - **`crawl_logs`가 무한 누적**됩니다. 90일 정리 같은 게 있으면 좋습니다
