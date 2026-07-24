@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import html
 import smtplib
 from collections import OrderedDict
@@ -11,7 +12,8 @@ from pathlib import Path
 from datetime import timedelta, timezone
 
 from shared.config import ROOT_DIR, Settings
-from shared.models import Item, User, parse_dt
+from shared.models import Item, NotificationJob, User, parse_dt, utc_now
+from shared.repository import BaseRepository
 
 KST = timezone(timedelta(hours=9))
 
@@ -140,6 +142,61 @@ def notify_new_items(
     return preview, notes
 
 
+def queue_new_item_notifications(
+    repository: BaseRepository,
+    users: list[User],
+    items: list[Item],
+    group_names: dict[str, str] | None = None,
+) -> list[str]:
+    """사용자별 메일 작업을 먼저 저장한다. 같은 수신자·글 묶음은 한 번만 등록한다."""
+    notes: list[str] = []
+    recipients = [u for u in users if u.notify_email and u.email]
+    if not recipients:
+        return ["이메일 알림을 켠 사용자가 없습니다."]
+
+    targeted = [(u, _filter_for_user(items, u)) for u in recipients]
+    targeted = [(u, mine) for u, mine in targeted if mine]
+    if not targeted:
+        return ["새 글은 있으나 그 사이트를 '알림 받을 사이트'로 고른 사람이 없습니다."]
+
+    existing_ids = {job.id for job in repository.list_notification_jobs()}
+    for user, mine in targeted:
+        raw = f"{user.id}|{'|'.join(sorted(item.hash for item in mine))}".encode("utf-8")
+        job_id = "mail_" + hashlib.sha256(raw).hexdigest()[:24]
+        if job_id in existing_ids:
+            continue
+        repository.save_notification_job(
+            NotificationJob(
+                id=job_id,
+                user_id=user.id,
+                recipient=user.email,
+                subject=_subject(mine),
+                html_body=build_email_html(mine, group_names),
+            )
+        )
+        existing_ids.add(job_id)
+    return notes
+
+
+def deliver_pending_notifications(
+    settings: Settings,
+    repository: BaseRepository,
+) -> list[str]:
+    """저장된 메일 작업을 발송하고 성공한 작업만 제거한다."""
+    notes: list[str] = []
+    for job in repository.list_notification_jobs():
+        ok, reason = _send(settings, [job.recipient], job.subject, job.html_body)
+        if ok:
+            repository.delete_notification_job(job.id)
+            continue
+        job.attempts += 1
+        job.last_error = reason
+        job.updated_at = utc_now()
+        repository.save_notification_job(job)
+        notes.append(f"{job.recipient} 발송 실패(재시도 {job.attempts}회) — {reason}")
+    return notes
+
+
 def notify_failures(settings: Settings, users: list[User], failures: list[tuple[str, str]]) -> Path | None:
     """Alert admins about sources that crossed the consecutive-failure threshold."""
     if not failures:
@@ -150,7 +207,11 @@ def notify_failures(settings: Settings, users: list[User], failures: list[tuple[
 
     if admins and settings.email_provider in {"gmail", "smtp"}:
         # 실패 알림은 '알림 받을 사이트' 설정과 무관하게 관리자 전원에게 보낸다.
-        if any(_send(settings, [u.email], subject, html_body)[0] for u in admins):
+        sent_any = False
+        for admin in admins:
+            ok, _ = _send(settings, [admin.email], subject, html_body)
+            sent_any = sent_any or ok
+        if sent_any:
             return None
 
     preview = ROOT_DIR / "data" / "last_failure_preview.html"

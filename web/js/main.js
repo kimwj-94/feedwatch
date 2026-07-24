@@ -75,8 +75,8 @@ async function bootCloud(cfg) {
   const fbUser = await adapter.waitForAuth();
   if (fbUser) {
     try {
-      const u = await adapter.resolveAppUser(fbUser.email);
-      if (u) { await adapter.startListeners(); return enterAs(u); }
+      const u = await adapter.resolveAppUser(fbUser);
+      if (u) { await adapter.startListeners(u); return enterAs(u); }
       await adapter.createRequest({ email: fbUser.email, name: fbUser.displayName || (fbUser.email || '').split('@')[0], provider: 'firebase', uid: fbUser.uid }).catch(() => {});
       return renderPending(fbUser.email);
     } catch (e) { console.error(e); }

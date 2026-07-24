@@ -38,9 +38,9 @@ export class CloudAuth {
   }
 
   async _gate(fbUser) {
-    const user = await this.adapter.resolveAppUser(fbUser.email);
+    const user = await this.adapter.resolveAppUser(fbUser);
     if (user) {
-      await this.adapter.startListeners();
+      await this.adapter.startListeners(user);
       return { user, provider: providerOf(fbUser) };
     }
     // 미등록 → 가입 신청 생성, 승인 대기

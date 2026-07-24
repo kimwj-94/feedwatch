@@ -30,7 +30,8 @@ def main() -> int:
     directory = sys.argv[2] if len(sys.argv) > 2 else os.getcwd()
     handler = partial(NoCacheHandler, directory=directory)
     ThreadingHTTPServer.allow_reuse_address = True
-    with ThreadingHTTPServer(("", port), handler) as httpd:
+    # 개발 서버는 현재 PC에서만 열어 작업 트리가 같은 네트워크에 노출되지 않게 한다.
+    with ThreadingHTTPServer(("127.0.0.1", port), handler) as httpd:
         print(f"no-cache dev server: http://localhost:{port}  (dir={directory})")
         httpd.serve_forever()
     return 0

@@ -14,6 +14,7 @@ from shared.models import (
     Group,
     Item,
     ItemStatus,
+    NotificationJob,
     Source,
     User,
     from_dict,
@@ -27,6 +28,18 @@ from shared.models import (
 # email_provider "" = 크롤러 환경설정(EMAIL_PROVIDER/.env/Secrets)을 그대로 따름.
 # 여기서 특정 값을 기본으로 두면 웹 설정이 GitHub Actions의 SMTP 설정을 덮어써 메일이 조용히 안 나간다.
 DEFAULT_APP_CONFIG: dict[str, Any] = {"auto_archive_days": 7, "trash_retention_days": 30, "email_enabled": True, "email_provider": ""}
+
+
+def unique_new_items(items: list[Item], existing_hashes: set[str]) -> list[Item]:
+    """기존 저장분과 이번 실행 안의 중복을 모두 제거한다."""
+    seen = set(existing_hashes)
+    unique: list[Item] = []
+    for item in items:
+        if item.hash in seen:
+            continue
+        seen.add(item.hash)
+        unique.append(item)
+    return unique
 
 
 class RepositoryError(RuntimeError):
@@ -111,6 +124,18 @@ class BaseRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def list_notification_jobs(self) -> list[NotificationJob]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_notification_job(self, job: NotificationJob) -> NotificationJob:
+        raise NotImplementedError
+
+    @abstractmethod
+    def delete_notification_job(self, job_id: str) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
     def get_app_config(self) -> dict[str, Any]:
         raise NotImplementedError
 
@@ -137,6 +162,7 @@ class LocalJsonRepository(BaseRepository):
             "items": [],
             "credentials": [],
             "crawl_logs": [],
+            "notification_jobs": [],
             "app_config": {},
         }
 
@@ -258,7 +284,7 @@ class LocalJsonRepository(BaseRepository):
             return []
         data = self._read()
         existing_hashes = {item["hash"] for item in data["items"]}
-        new_items = [item for item in items if item.hash not in existing_hashes]
+        new_items = unique_new_items(items, existing_hashes)
         data["items"].extend(to_dict(item) for item in new_items)
         self._write(data)
         return new_items
@@ -321,6 +347,26 @@ class LocalJsonRepository(BaseRepository):
         data["crawl_logs"].append(to_dict(log))
         self._write(data)
         return log
+
+    def list_notification_jobs(self) -> list[NotificationJob]:
+        data = self._read()
+        jobs = [from_dict(NotificationJob, item) for item in data.get("notification_jobs", [])]
+        return sorted(jobs, key=lambda x: parse_dt(x.created_at))
+
+    def save_notification_job(self, job: NotificationJob) -> NotificationJob:
+        data = self._read()
+        rows = [row for row in data.get("notification_jobs", []) if row["id"] != job.id]
+        rows.append(to_dict(job))
+        data["notification_jobs"] = rows
+        self._write(data)
+        return job
+
+    def delete_notification_job(self, job_id: str) -> None:
+        data = self._read()
+        data["notification_jobs"] = [
+            row for row in data.get("notification_jobs", []) if row["id"] != job_id
+        ]
+        self._write(data)
 
     def get_app_config(self) -> dict[str, Any]:
         data = self._read()
