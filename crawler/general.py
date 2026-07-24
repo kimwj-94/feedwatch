@@ -60,6 +60,56 @@ def discover_feed(html: str, base_url: str) -> str | None:
     return None
 
 
+def _items_from_html_nodes(source: Source, nodes, base_url: str, max_items: int = 30) -> list[Item]:
+    items: list[Item] = []
+    for node in nodes[:max_items]:
+        title = " ".join(node.get_text(" ", strip=True).split())
+        href = node.get("href") if hasattr(node, "get") else ""
+        if not title or not href:
+            continue
+        items.append(_make_item(source, title, urljoin(base_url, href)))
+    return items
+
+
+def _crawl_rendered_page(source: Source, selector: str, timeout: int) -> list[Item]:
+    """JavaScript가 목록을 채우는 사이트를 선택적으로 렌더링해 수집한다."""
+    try:
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise RuntimeError("JavaScript 페이지 수집에는 Playwright가 필요합니다.") from exc
+
+    configured_wait = source.metadata.get("render_wait_ms", timeout * 1000)
+    try:
+        wait_ms = max(1_000, min(int(configured_wait), 60_000))
+    except (TypeError, ValueError):
+        wait_ms = timeout * 1000
+
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            try:
+                page = browser.new_page(extra_http_headers={"Accept-Language": UA["Accept-Language"]})
+                page.goto(source.url, wait_until="domcontentloaded", timeout=wait_ms)
+                page.wait_for_selector(selector, timeout=wait_ms)
+                locator = page.locator(selector)
+                items: list[Item] = []
+                for index in range(min(locator.count(), 30)):
+                    element = locator.nth(index)
+                    title = " ".join((element.inner_text() or "").split())
+                    href = element.get_attribute("href") or ""
+                    if not title or not href:
+                        continue
+                    items.append(_make_item(source, title, urljoin(page.url, href)))
+                if not items:
+                    raise RuntimeError(f"렌더링 후 선택자에 맞는 글이 없습니다: {selector}")
+                return items
+            finally:
+                browser.close()
+    except PlaywrightTimeoutError as exc:
+        raise RuntimeError(f"동적 페이지에서 선택자를 기다리다 시간 초과했습니다: {selector}") from exc
+
+
 def crawl_general_source(source: Source, timeout: int = 20) -> list[Item]:
     """선택자 없이도 동작: ① URL이 피드면 바로 ② 페이지에서 RSS 자동탐지 ③ 둘 다 없으면 선택자 스크래핑."""
     response = requests.get(source.url, headers=UA, timeout=timeout)
@@ -96,12 +146,8 @@ def crawl_general_source(source: Source, timeout: int = 20) -> list[Item]:
     soup = BeautifulSoup(text, "html.parser")
     nodes = soup.select(selector)
     if not nodes:
+        render_js = source.metadata.get("render_js")
+        if render_js is True or str(render_js).strip().lower() in {"1", "true", "yes", "on"}:
+            return _crawl_rendered_page(source, selector, timeout)
         raise RuntimeError(f"선택자에 맞는 글이 없습니다: {selector}")
-    items: list[Item] = []
-    for node in nodes[:30]:
-        title = " ".join(node.get_text(" ", strip=True).split())
-        href = node.get("href") if hasattr(node, "get") else ""
-        if not title or not href:
-            continue
-        items.append(_make_item(source, title, urljoin(response.url, href)))
-    return items
+    return _items_from_html_nodes(source, nodes, response.url)
