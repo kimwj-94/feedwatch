@@ -26,7 +26,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Firebase 웹 설정. 저장소에 web/firebase_config.json을 커밋해 뒀으면 그대로 쓰고,
       # 커밋하지 않았다면 저장소 변수 FIREBASE_WEB_CONFIG(Settings → Variables)에서 만들어 넣는다.

@@ -44,7 +44,7 @@
 - [x] Authentication → 승인된 도메인에 Pages 도메인 추가
 - [x] 구분값 생성 및 동작 확인
 
-**아직 안 된 것** → 아래 5장
+자동 수집·배포·실제 Gmail 발송까지 정상 운영을 확인했습니다. 가족별 알림 선택 등 사용자 운영 항목은 아래 5장 참고.
 
 ## 4. 오늘(2026-07-23) 작업 이력
 
@@ -80,9 +80,8 @@ Google 로그인 버튼의 G 마크가 카드를 덮을 만큼 커지던 **원�
 발송 안 됨 / 재실행 시 중복 발송 없음 / 게시물 1건 추가 → 그 1건만 담긴 메일 1통 /
 SMTP 실패 시 사유 노출.
 
-> **아직 검증 못 한 것**: 실제 Gmail SMTP 인증(앱 비밀번호 필요). 위 검증은 로컬 SMTP 서버로
-> 프로토콜 대화까지 실제로 주고받은 것이며, TLS 협상 자체는 자체서명 인증서 문제로 제외했습니다.
-> 집 PC에서 Secrets를 넣고 1회 실행해 최종 확인이 필요합니다.
+실제 Gmail 앱 비밀번호를 GitHub Secret에 등록한 뒤 일회성 알림 작업을 넣어 운영 환경에서도 검증했습니다.
+GitHub Actions에서 SMTP 인증·발송이 성공했고, 성공한 알림 작업이 Firestore 대기열에서 자동 삭제되는 것까지 확인했습니다.
 
 ### 4-4. 기능 추가
 
@@ -95,7 +94,7 @@ SMTP 실패 시 사유 노출.
 
 ### 4-5. 운영 안정화·보안 보강 (2026-07-24)
 
-- **회귀 테스트 도입** — Python 표준 `unittest` 기반 16개 테스트와 GitHub Actions `Test` 워크플로 추가.
+- **회귀 테스트 도입** — Python 표준 `unittest` 기반 19개 테스트와 GitHub Actions `Test` 워크플로 추가.
   해시 판정·과거 스키마·첫 수집·중복 제거·알림 필터·메일 재시도·암호화 쿠키·자격증명 정리를 검증
 - **UID 기반 가입으로 통일** — 이메일 사전 등록은 Firestore UID 권한과 맞지 않아 제거.
   가족이 먼저 로그인해 가입 신청을 만들고 관리자가 승인하는 흐름만 사용
@@ -112,21 +111,26 @@ SMTP 실패 시 사유 노출.
 - **네이버 쿠키 암호화** — 비공개 카페 쿠키를 평문 `metadata` 대신 AES-256-GCM 암호화
   `credentials`에 저장. 기존 평문 데이터는 크롤러 호환을 유지하며 다음 편집 시 암호화 이전 요구
 - **데모 서버 노출 차단** — 개발용 서버를 `127.0.0.1`에만 바인딩
+- **JavaScript 동적 게시판 지원** — 정적 HTML에 글이 없고 `metadata.render_js`가 켜진 일반 사이트는
+  Playwright로 렌더링한 뒤 선택자를 적용. 청년안심주택 모집공고에서 실제 수집 검증
 
 검증 결과:
 - Python 3.13 환경 진단: **FAIL 0**
-- Python 회귀 테스트: **16/16 통과**
+- Python 회귀 테스트: **19/19 통과**
 - 전체 웹 JavaScript 구문 검사: **통과**
 - localhost 데모 응답: HTML·JS·CSS·샘플 JSON 모두 200, `firebase_config.json` 미존재 시 DEMO 모드 확인
 - Word 설치설명서 재생성 및 DOCX ZIP·XML 구조 검증 통과. 이 PC에 LibreOffice가 없어 페이지 이미지 렌더 검증은 생략
-- 이 PC에 Java·Firebase CLI가 없어 Firestore Rules 에뮬레이터 검증은 실제 Firebase 반영 단계로 이월
+- Firebase CLI로 `firestore.rules` 컴파일 및 실제 프로젝트 게시 성공
+- GitHub Pages 배포 성공, 공개 주소의 HTML·CSS·JavaScript·Firebase 설정 모두 HTTP 200 확인
+- 실제 GitHub Crawl: 3개 소스 모두 성공, 첫 수집 28건 저장(기존 글이므로 메일 제외), 재실행 신규 0건
+- 실제 Gmail SMTP 테스트 메일 발송 및 알림 작업 자동 삭제 확인
 
 > 브라우저 자동 클릭 검증은 현재 Codex 브라우저 연결의 로컬 권한 오류로 실행하지 못했습니다.
 > 정적 응답·구문·단위 테스트는 모두 통과했으며, 실제 브라우저 수동 점검은 아래 5장 운영 준비 때 함께 진행합니다.
 
-## 5. 남은 절차
+## 5. 남은 운영 절차
 
-### 5-1. 크롤러 자동화 (서비스 계정 키 필요)
+### 5-1. 크롤러 자동화 (완료)
 
 GitHub 저장소 **Settings → Secrets and variables → Actions → Secrets** 에 등록:
 
@@ -135,17 +139,16 @@ GitHub 저장소 **Settings → Secrets and variables → Actions → Secrets** 
 | `FIREBASE_PROJECT_ID` | Firebase 프로젝트 ID | ✅ 등록됨 |
 | `FEEDWATCH_ADMIN_EMAIL` | 관리자 이메일 | ✅ 등록됨 |
 | `SMTP_HOST` `SMTP_PORT` `SMTP_USERNAME` `SMTP_FROM` | Gmail 기준 값 | ✅ 등록됨 |
-| **`SMTP_PASSWORD`** | Google 계정 **앱 비밀번호 16자리** | ⬜ **직접 입력 필요** |
-| **`FIREBASE_SERVICE_ACCOUNT_JSON`** | 콘솔 → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 → **JSON 내용 전체** | ⬜ **직접 입력 필요** |
+| **`SMTP_PASSWORD`** | Google 계정 **앱 비밀번호 16자리** | ✅ 등록·실제 발송 확인 |
+| **`FIREBASE_SERVICE_ACCOUNT_JSON`** | 콘솔 → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 → **JSON 내용 전체** | ✅ 등록·실제 Firestore 연결 확인 |
 | `FEEDWATCH_CRED_PASSPHRASE` | (로그인 필요 사이트를 쓸 때만) 웹에서 정한 '수집 비밀번호' | ⬜ 해당 시 |
 
-> 남은 두 개는 자격증명이라 직접 넣으셔야 합니다.
-> **앱 비밀번호**: Google 계정 → 보안 → 2단계 인증을 켠 뒤 '앱 비밀번호' 생성(16자리).
-> 일반 로그인 비밀번호로는 SMTP 인증이 되지 않습니다.
+> **앱 비밀번호**는 일반 로그인 비밀번호와 다릅니다. Google 계정 비밀번호를 바꾸면 기존 앱 비밀번호가
+> 폐기될 수 있으므로, 메일 인증 오류가 나면 새 앱 비밀번호를 만들어 `SMTP_PASSWORD`를 갱신하세요.
 > 다른 메일을 쓰려면 `SMTP_HOST`·`SMTP_PORT`·`SMTP_USERNAME`·`SMTP_FROM`도 함께 바꾸세요
 > (네이버 = `smtp.naver.com` / `465`, 메일 설정에서 SMTP 사용을 먼저 켜야 함).
 
-등록 후 **Actions → FeedWatch Crawl → Run workflow** 로 1회 수동 실행 → 앱에서 새 글 확인.
+수동 점검은 **Actions → FeedWatch Crawl → Run workflow** 로 실행합니다.
 
 > **메일이 안 오면 앱의 관리 → 크롤링 로그를 보세요.** 이제 `[이메일]` 줄에 실패 사유가
 > 그대로 남습니다(인증 실패, 연결 거부 등). Gmail은 일반 비밀번호가 아니라 **앱 비밀번호**를
@@ -153,10 +156,10 @@ GitHub 저장소 **Settings → Secrets and variables → Actions → Secrets** 
 
 ### 5-2. 실제 운영 준비
 
-- [ ] 감시할 사이트 등록 (관리 → URL 관리). 일반 사이트는 **주소만** 넣으면 됩니다
+- [x] 초기 감시 사이트 3개 등록 및 실제 수집 확인
 - [ ] 각자 **내 설정 → 알림 받을 사이트** 선택 (안 고르면 메일이 오지 않습니다)
 - [ ] 가족 초대: 앱 주소 공유 → 각자 로그인 → 관리자가 **관리 → 가입 신청**에서 승인
-- [ ] 메일이 실제로 오는지 확인
+- [x] Gmail SMTP 테스트 메일 실제 발송 확인
 
 ### 5-3. 로컬에서 점검하고 싶을 때
 
@@ -183,7 +186,7 @@ pip install -r requirements.txt
 | 결정 | 이유 |
 |---|---|
 | **Firebase Hosting 대신 GitHub Pages** | 작업 PC에 node/npm이 없어 Firebase CLI 설치 불가. 크롤러 때문에 어차피 GitHub 저장소가 필요해 한 곳으로 통합 |
-| **보안 규칙은 콘솔 붙여넣기** | 같은 이유(CLI 없음). 규칙을 고치면 콘솔 규칙 탭에 다시 붙여넣어야 함 |
+| **보안 규칙은 저장소에서 관리** | `firestore.rules`를 Git으로 추적하고 Firebase CLI로 컴파일·게시까지 검증 |
 | **저장소를 공개(Public)로** | Pages·Actions 무료 한도가 공개 저장소에서 넉넉함. 비밀값은 전부 `.gitignore`+Secrets로 분리 |
 | **웹 설정을 저장소 변수로 주입** | `firebase_config.json`을 커밋하지 않으면서 배포는 되게. 값 자체는 비밀이 아님 |
 | **알림: 미선택 = 안 받음** | "비워두면 전체"는 원치 않는 알림을 받게 되는 위험한 기본값 |
