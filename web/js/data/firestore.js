@@ -1,12 +1,13 @@
 // Cloud adapter: live Firestore + Auth via the Firebase JS SDK (modular, CDN).
 // Loaded lazily only when firebase_config.json is present, so demo mode stays
 // dependency-free. Exposes the same interface as LocalAdapter and respects the
-// security rules in firestore.rules (members may only change item status fields;
-// sources/groups/users/config are admin-only; credentials are never touched here).
+// security rules in firestore.rules (members manage sources/groups and item status;
+// users/config and encrypted credentials are restricted to admins).
 import { Adapter, DEFAULT_CONFIG, ITEM_STATUS, newId, nowIso } from './adapter.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.5';
-const COLLECTIONS = ['groups', 'sources', 'items', 'users', 'crawl_logs', 'access_requests'];
+const MEMBER_COLLECTIONS = ['groups', 'sources', 'items', 'crawl_logs'];
+const ADMIN_COLLECTIONS = ['users', 'access_requests'];
 
 export class CloudAdapter extends Adapter {
   constructor(fb) {
@@ -59,16 +60,26 @@ export class CloudAdapter extends Adapter {
   async signOut() { this._stopListeners(); await this.fb.auth.signOut(this.fb.authMod); }
 
   /* ---------- realtime listeners ---------- */
-  async startListeners() {
+  async startListeners(user) {
     if (this._started) return;
     this._started = true;
     const { collection, onSnapshot, doc } = this.fb.fs;
-    for (const name of COLLECTIONS) {
+    const collections = user && user.role === 'admin'
+      ? [...MEMBER_COLLECTIONS, ...ADMIN_COLLECTIONS]
+      : MEMBER_COLLECTIONS;
+    for (const name of collections) {
       const unsub = onSnapshot(collection(this.fb.db, name), snap => {
         this.cache[name] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         this._emit();
       }, err => console.error(`[firestore] ${name} listener`, err));
       this._unsubs.push(unsub);
+    }
+    if (user && user.role !== 'admin') {
+      const userUnsub = onSnapshot(doc(this.fb.db, 'users', user.id), d => {
+        this.cache.users = d.exists() ? [{ id: d.id, ...d.data() }] : [];
+        this._emit();
+      }, err => console.error('[firestore] current user listener', err));
+      this._unsubs.push(userUnsub);
     }
     const cfgUnsub = onSnapshot(doc(this.fb.db, 'app_config', 'global'), d => {
       this.cache.config = { ...DEFAULT_CONFIG, ...(d.exists() ? d.data() : {}) };
@@ -84,10 +95,14 @@ export class CloudAdapter extends Adapter {
     const snap = await getDocs(collection(this.fb.db, 'users'));
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
-  async resolveAppUser(email) {
-    const target = (email || '').toLowerCase();
-    const users = this.cache.users.length ? this.cache.users : await this._fetchUsers();
-    return users.find(u => (u.email || '').toLowerCase() === target) || null;
+  async resolveAppUser(fbUser) {
+    if (!fbUser || !fbUser.uid) return null;
+    const { doc, getDoc } = this.fb.fs;
+    const snap = await getDoc(doc(this.fb.db, 'users', fbUser.uid));
+    if (!snap.exists()) return null;
+    const user = { id: snap.id, ...snap.data() };
+    this.cache.users = [user];
+    return user;
   }
   _set(coll, id, data) { const { doc, setDoc } = this.fb.fs; return setDoc(doc(this.fb.db, coll, id), data); }
   _del(coll, id) { const { doc, deleteDoc } = this.fb.fs; return deleteDoc(doc(this.fb.db, coll, id)); }
@@ -121,7 +136,16 @@ export class CloudAdapter extends Adapter {
     await this._set('sources', s.id, s);
     return s;
   }
-  async deleteSource(id) { await this._del('sources', id); }
+  async deleteSource(id) {
+    const { doc, writeBatch } = this.fb.fs;
+    const source = this.cache.sources.find(s => s.id === id);
+    const batch = writeBatch(this.fb.db);
+    batch.delete(doc(this.fb.db, 'sources', id));
+    if (source && source.credential_id) {
+      batch.delete(doc(this.fb.db, 'credentials', source.credential_id));
+    }
+    await batch.commit();
+  }
   // 자격증명: 관리자만 쓰기(규칙). 이미 암호화된 값만 저장하며 앱에서 읽지 않는다.
   async saveCredential(cred) {
     const c = { ...cred };
@@ -130,6 +154,7 @@ export class CloudAdapter extends Adapter {
     await this._set('credentials', c.id, c);
     return c;
   }
+  async deleteCredential(id) { if (id) await this._del('credentials', id); }
 
   /* ---------- items ---------- */
   async listItems() { return [...this.cache.items].sort((a, b) => (b.fetched_at || '').localeCompare(a.fetched_at || '')); }
@@ -149,7 +174,7 @@ export class CloudAdapter extends Adapter {
   async saveUser(user) {
     const { doc, setDoc } = this.fb.fs;
     const u = { ...user };
-    if (!u.id) { u.id = newId('user'); u.created_at = nowIso(); }
+    if (!u.id) throw new Error('새 사용자는 가입 신청을 승인해 추가해야 합니다.');
     // merge — 문서를 통째로 갈아끼우면 보내지 않은 필드(role 등)가 삭제된다.
     await setDoc(doc(this.fb.db, 'users', u.id), u, { merge: true });
     return u;

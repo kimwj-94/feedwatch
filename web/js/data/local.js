@@ -99,6 +99,10 @@ export class LocalAdapter extends Adapter {
     this._commit();
     return c;
   }
+  async deleteCredential(id) {
+    this.data.credentials = (this.data.credentials || []).filter(c => c.id !== id);
+    this._commit();
+  }
 
   // ---- items ----
   async listItems() { return this._clone(this.data.items).sort((a, b) => (b.fetched_at || '').localeCompare(a.fetched_at || '')); }

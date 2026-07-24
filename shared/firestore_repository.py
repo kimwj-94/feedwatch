@@ -7,8 +7,8 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 from shared.config import Settings
-from shared.models import CrawlLog, Credential, Group, Item, ItemStatus, Source, User, from_dict, new_id, parse_dt, to_dict, utc_now
-from shared.repository import DEFAULT_APP_CONFIG, BaseRepository, RepositoryError
+from shared.models import CrawlLog, Credential, Group, Item, ItemStatus, NotificationJob, Source, User, from_dict, new_id, parse_dt, to_dict, utc_now
+from shared.repository import DEFAULT_APP_CONFIG, BaseRepository, RepositoryError, unique_new_items
 
 
 class FirestoreRepository(BaseRepository):
@@ -72,7 +72,14 @@ class FirestoreRepository(BaseRepository):
         return source
 
     def delete_source(self, source_id: str) -> None:
-        self._collection("sources").document(source_id).delete()
+        source_ref = self._collection("sources").document(source_id)
+        source_doc = source_ref.get()
+        credential_id = (source_doc.to_dict() or {}).get("credential_id") if source_doc.exists else None
+        batch = self.db.batch()
+        batch.delete(source_ref)
+        if credential_id:
+            batch.delete(self._collection("credentials").document(credential_id))
+        batch.commit()
 
     def save_credential(self, credential: Credential) -> Credential:
         if not credential.id:
@@ -100,12 +107,13 @@ class FirestoreRepository(BaseRepository):
 
     def add_items_dedup(self, items: list[Item]) -> list[Item]:
         existing_hashes = {item.hash for item in self.list_items()}
-        new_items = [item for item in items if item.hash not in existing_hashes]
-        batch = self.db.batch()
-        for item in new_items:
-            ref = self._collection("items").document(item.id)
-            batch.set(ref, to_dict(item))
-        if new_items:
+        new_items = unique_new_items(items, existing_hashes)
+        # Firestore batch는 최대 500개 쓰기만 허용한다. 여유를 두고 나눠 저장한다.
+        for start in range(0, len(new_items), 450):
+            batch = self.db.batch()
+            for item in new_items[start : start + 450]:
+                ref = self._collection("items").document(item.id)
+                batch.set(ref, to_dict(item))
             batch.commit()
         return new_items
 
@@ -148,6 +156,20 @@ class FirestoreRepository(BaseRepository):
     def save_log(self, log: CrawlLog) -> CrawlLog:
         self._collection("crawl_logs").document(log.id).set(to_dict(log))
         return log
+
+    def list_notification_jobs(self) -> list[NotificationJob]:
+        return sorted(
+            self._rows("notification_jobs", NotificationJob),
+            key=lambda x: parse_dt(x.created_at),
+        )
+
+    def save_notification_job(self, job: NotificationJob) -> NotificationJob:
+        job.updated_at = utc_now()
+        self._collection("notification_jobs").document(job.id).set(to_dict(job))
+        return job
+
+    def delete_notification_job(self, job_id: str) -> None:
+        self._collection("notification_jobs").document(job_id).delete()
 
     def get_app_config(self) -> dict[str, Any]:
         doc = self._collection("app_config").document("global").get()

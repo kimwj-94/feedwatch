@@ -7,17 +7,24 @@ import requests
 from bs4 import BeautifulSoup
 
 from crawler.general import crawl_general_source, entry_published
+from shared.config import Settings
+from shared.crypto import PassphraseCipher
 from shared.models import Item, Source, item_hash, new_id
+from shared.repository import BaseRepository
 
 
-def crawl_naver_source(source: Source) -> list[Item]:
+def crawl_naver_source(
+    source: Source,
+    repository: BaseRepository,
+    settings: Settings,
+) -> list[Item]:
     max_items = int(source.metadata.get("max_items", 30))
     for rss_url in _rss_candidates(source):
         items = _crawl_rss(source, rss_url, max_items)
         if items:
             return items
 
-    session = _build_session(source)
+    session = _build_session(source, repository, settings)
     html, final_url = _get_html(session, source.url)
     iframe_url = _extract_iframe_url(html, final_url, source.metadata.get("iframe_selector", "iframe#cafe_main"))
     if iframe_url:
@@ -67,10 +74,24 @@ def _crawl_rss(source: Source, rss_url: str, max_items: int) -> list[Item]:
     return items
 
 
-def _build_session(source: Source) -> requests.Session:
+def _build_session(
+    source: Source,
+    repository: BaseRepository,
+    settings: Settings,
+) -> requests.Session:
     session = requests.Session()
     session.headers.update(_headers(source))
-    cookie_header = source.metadata.get("cookie") or source.metadata.get("cookie_header")
+    cookie_header = None
+    if source.credential_id:
+        credential = repository.get_credential(source.credential_id)
+        if not credential:
+            raise RuntimeError(f"Credential not found: {source.credential_id}")
+        if credential.cookie_encrypted:
+            cookie_header = PassphraseCipher(settings.cred_passphrase).decrypt(
+                credential.cookie_encrypted
+            )
+    # 과거 평문 저장 데이터 호환. 웹에서 다시 저장하면 암호화 credentials로 이전된다.
+    cookie_header = cookie_header or source.metadata.get("cookie") or source.metadata.get("cookie_header")
     if cookie_header:
         session.headers.update({"Cookie": cookie_header})
     cookies = source.metadata.get("cookies")

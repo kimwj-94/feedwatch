@@ -12,14 +12,14 @@
 ## 2. 첫 관리자 부트스트랩
 - [ ] 앱에서 본인 로그인(→ 승인 대기 화면이 떠도 계정은 생성됨)
 - [ ] `py -m scripts.make_admin --email 내이메일` 실행 → `users/{uid}` 관리자 문서 + 기본 구분값 생성
-- [ ] 새로고침하면 관리자 입장. 이후 가족은 **가입 신청 → 승인**으로 추가(또는 사용자 관리에서 등록)
+- [ ] 새로고침하면 관리자 입장. 이후 가족은 앱에서 한 번 로그인해 **가입 신청 → 승인**으로 추가
 
 ## 3. Google API (필요 시)
 - [ ] 이메일 발송용 SMTP 또는 Gmail API 준비
 - [ ] (선택) YouTube Data API v3 → `YOUTUBE_API_KEY`. 채널 URL만으로 수집되므로 보통 불필요
 
 ## 4. 보안 값 / Secrets
-- [ ] (로그인 필요 사이트가 있을 때) 웹 → URL 관리에서 아이디/비번 입력 시 정한 **‘수집 비밀번호’** 기록
+- [ ] (로그인 사이트 또는 비공개 네이버 카페 사용 시) 웹 → URL 관리에서 정한 **‘수집 비밀번호’** 기록
 - [ ] `.env` 작성(`.env.example` 참고) — 로컬 실행용
 - [ ] GitHub Secrets: `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `FEEDWATCH_ADMIN_EMAIL`,
       `SMTP_*`, (선택) `YOUTUBE_API_KEY`, `FEEDWATCH_CRED_PASSPHRASE`
@@ -29,7 +29,7 @@
 ## 5. 모니터링 URL (웹 관리자 → URL 관리)
 - [ ] 일반: CSS 선택자가 게시글 링크를 정확히 잡는지
 - [ ] 유튜브: 채널 URL 또는 `channel_id`
-- [ ] 네이버 블로그: RSS 동작 / 카페: iframe·선택자(필요 시 쿠키)
+- [ ] 네이버 블로그: RSS 동작 / 카페: iframe·선택자(비공개면 관리자 입력칸에서 쿠키 암호화 저장)
 - [ ] 로그인 사이트: 로그인 선택자 + 게시글 선택자, 웹에서 아이디/비번 등록(‘로그인정보 등록됨’ 확인)
 - [ ] 선택자 확인은 `python -m crawler.main_crawler --source <id>` 로그로 점검
 

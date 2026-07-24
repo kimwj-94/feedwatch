@@ -25,9 +25,11 @@ service cloud.firestore {
         .hasOnly(["name", "notify_email", "notify_sources", "last_seen", "last_login"]);
     }
 
-    // 로그인 게이트가 승인 여부를 확인해야 하므로 users 읽기는 로그인 사용자에 허용
+    // 로그인 게이트는 users/{본인 uid} 한 문서만 확인한다.
+    // 전체 가족 목록(이메일·알림 설정 포함)은 관리자만 조회할 수 있다.
     match /users/{userId} {
-      allow read: if signedIn();
+      allow get: if ownsUser(userId) || isAdmin();
+      allow list: if isAdmin();
       allow create, delete: if isAdmin();
       allow update: if isAdmin() || (ownsUser(userId) && onlyProfileFields());
     }
@@ -77,6 +79,11 @@ service cloud.firestore {
     match /credentials/{credentialId} {
       allow read: if false;
       allow create, update, delete: if isAdmin();
+    }
+
+    // 이메일 재시도 대기열은 크롤러(Admin SDK)만 접근한다.
+    match /notification_jobs/{jobId} {
+      allow read, write: if false;
     }
   }
 }

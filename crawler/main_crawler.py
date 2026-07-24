@@ -17,7 +17,12 @@ import requests
 from crawler.general import crawl_general_source
 from crawler.login_site import crawl_login_required_source
 from crawler.naver import crawl_naver_source
-from crawler.notifier import notify_failures, notify_new_items
+from crawler.notifier import (
+    deliver_pending_notifications,
+    notify_failures,
+    notify_new_items,
+    queue_new_item_notifications,
+)
 from crawler.youtube import crawl_youtube_source
 from shared.config import load_settings
 from shared.models import CrawlLog, Item, new_id, parse_dt, utc_now
@@ -46,7 +51,7 @@ def crawl_source(source, repository, settings) -> list[Item]:
     if source.type == "youtube":
         return crawl_youtube_source(source, settings.youtube_api_key)
     if source.type == "naver":
-        return crawl_naver_source(source)
+        return crawl_naver_source(source, repository, settings)
     if source.type == "login_required":
         return crawl_login_required_source(source, repository, settings)
     raise ValueError(f"Unsupported source type: {source.type}")
@@ -87,6 +92,7 @@ def run(source_filter: str | None = None) -> int:
     collected: list[Item] = []
     success_count = 0
     newly_failing: list[tuple[str, str]] = []  # crossed the failure threshold this run
+    completed_first_crawls = []
 
     # 이번에 처음 수집하는 사이트 — 기존 글이 한꺼번에 '신규'로 잡히므로 알림에서 제외한다.
     first_time_source_ids = {s.id for s in sources if not s.first_crawl_done}
@@ -101,8 +107,9 @@ def run(source_filter: str | None = None) -> int:
                 source.last_error = None
                 changed = True
             if not source.first_crawl_done:
-                source.first_crawl_done = True   # 다음 수집부터는 알림을 보낸다
-                changed = True
+                # 항목 저장이 성공한 뒤에만 완료로 기록한다. 먼저 표시하면 저장 실패 다음 실행에
+                # 기존 글이 새 글 알림으로 나갈 수 있다.
+                completed_first_crawls.append(source)
             if changed:
                 repository.save_source(source)
         except Exception as exc:
@@ -119,6 +126,9 @@ def run(source_filter: str | None = None) -> int:
             time.sleep(random.uniform(settings.crawl_min_delay, settings.crawl_max_delay))
 
     new_items = repository.add_items_dedup(collected)
+    for source in completed_first_crawls:
+        source.first_crawl_done = True
+        repository.save_source(source)
     users = repository.list_users()
 
     # 첫 수집분은 앱에는 담기지만(위에서 이미 저장됨) 메일로는 보내지 않는다.
@@ -135,6 +145,12 @@ def run(source_filter: str | None = None) -> int:
     if not config.get("email_enabled", True):
         if notifiable:
             email_notes.append("설정에서 이메일 알림이 꺼져 있어 발송하지 않았습니다.")
+    elif settings.email_provider in {"gmail", "smtp"}:
+        if notifiable:
+            email_notes.extend(
+                queue_new_item_notifications(repository, users, notifiable, group_names)
+            )
+        email_notes.extend(deliver_pending_notifications(settings, repository))
     elif notifiable:
         preview, notes = notify_new_items(settings, users, notifiable, group_names)
         email_notes.extend(notes)

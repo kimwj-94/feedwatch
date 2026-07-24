@@ -88,8 +88,9 @@ class Source:
 class Credential:
     id: str
     source_id: str
-    username_encrypted: str
-    password_encrypted: str
+    username_encrypted: str = ""
+    password_encrypted: str = ""
+    cookie_encrypted: str | None = None
     updated_at: str = field(default_factory=utc_now)
 
 
@@ -121,6 +122,19 @@ class CrawlLog:
     failed_sources: list[str] = field(default_factory=list)
     error_messages: dict[str, str] = field(default_factory=dict)
     duration_seconds: float = 0
+
+
+@dataclass
+class NotificationJob:
+    id: str
+    user_id: str
+    recipient: str
+    subject: str
+    html_body: str
+    created_at: str = field(default_factory=utc_now)
+    attempts: int = 0
+    last_error: str | None = None
+    updated_at: str = field(default_factory=utc_now)
 
 
 def to_dict(value: Any) -> dict[str, Any]:

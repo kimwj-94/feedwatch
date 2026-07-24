@@ -30,6 +30,7 @@ export function mountApp(root, ctx) {
   const state = { view: 'dashboard', groupId: null, dateFilter: 'all', sort: 'newest', query: '', editingSource: null };
   let data = { groups: [], sources: [], items: [], users: [], requests: [], logs: [], config: {} };
   let loaded = false, sidebarOpen = false, lastRefreshed = null;
+  let credentialPassphrase = null;
 
   /* ---------- persistent chrome ---------- */
   const navEl = el('nav', { class: 'sidebar-nav', 'aria-label': '주 메뉴' });
@@ -346,8 +347,7 @@ export function mountApp(root, ctx) {
 
   /* ---------- credential passphrase ---------- */
   function ensurePassphrase() {
-    const cached = sessionStorage.getItem('feedwatch_cred_pass');
-    if (cached) return Promise.resolve(cached);
+    if (credentialPassphrase) return Promise.resolve(credentialPassphrase);
     return new Promise(resolve => {
       let done = false;
       const input = el('input', { class: 'input', type: 'password', placeholder: '수집 비밀번호', autocomplete: 'off' });
@@ -359,7 +359,7 @@ export function mountApp(root, ctx) {
         ],
         actions: [
           { label: '취소', variant: 'ghost', onClick: () => { done = true; resolve(null); } },
-          { label: '확인', variant: 'primary', autofocus: true, onClick: () => { const v = input.value; if (!v) return false; sessionStorage.setItem('feedwatch_cred_pass', v); done = true; resolve(v); } },
+          { label: '확인', variant: 'primary', autofocus: true, onClick: () => { const v = input.value; if (!v) return false; credentialPassphrase = v; done = true; resolve(v); } },
         ],
         onClose: () => { if (!done) resolve(null); },
       });
@@ -376,6 +376,13 @@ export function mountApp(root, ctx) {
     f.active = el('input', { type: 'checkbox', checked: true });
     f.credUser = el('input', { class: 'input', placeholder: '로그인 아이디', autocomplete: 'off' });
     f.credPass = el('input', { class: 'input', type: 'password', placeholder: '로그인 비밀번호', autocomplete: 'new-password' });
+    f.naverCookie = el('input', { class: 'input', type: 'password', placeholder: 'NID_AUT=…; NID_SES=…', autocomplete: 'off' });
+    const rawMeta0 = (editing && editing.metadata) || {};
+    const hasLegacyNaverCookie = !!(rawMeta0.cookie || rawMeta0.cookie_header || rawMeta0.cookies);
+    const meta0 = { ...rawMeta0 };
+    delete meta0.cookie;
+    delete meta0.cookie_header;
+    delete meta0.cookies;
 
     // 구분값: 여러 개 선택 가능(하나의 사이트를 아빠·엄마 양쪽에 넣는 식)
     const selectedGroups = new Set(groupsOf(editing || {}));
@@ -393,6 +400,12 @@ export function mountApp(root, ctx) {
       isAdmin ? field('로그인 아이디', f.credUser) : el('div', { class: 'dline__sub', text: '아이디·비밀번호 입력은 관리자만 가능합니다.' }),
       isAdmin ? field('로그인 비밀번호', f.credPass) : null,
       credStatus,
+    ]);
+    const naverCredStatus = el('div', { class: 'dline__sub' });
+    const naverCredBlock = el('div', { class: 'field', hidden: true }, [
+      el('div', { class: 'banner banner--warn' }, [icon('key'), '비공개 카페에서만 필요합니다. 쿠키는 수집 비밀번호로 암호화되며, URL 설정에는 평문으로 남지 않습니다.']),
+      isAdmin ? field('네이버 로그인 쿠키', f.naverCookie, '브라우저 개발자 도구에서 복사한 Cookie 요청 헤더 값') : el('div', { class: 'dline__sub', text: '네이버 로그인 쿠키 입력은 관리자만 가능합니다.' }),
+      naverCredStatus,
     ]);
 
     const TYPE_HINTS = {
@@ -417,7 +430,6 @@ export function mountApp(root, ctx) {
         { key: 'rss_url', label: 'RSS 주소', hint: '블로그는 보통 자동으로 찾습니다. 못 찾을 때만 직접 넣으세요.', ph: 'https://rss.blog.naver.com/아이디.xml' },
         { key: 'iframe_selector', label: '카페 본문 틀', hint: '네이버 카페는 글 목록이 페이지 안의 별도 틀에 들어 있습니다. 그대로 두세요.', ph: 'iframe#cafe_main' },
         { key: '@selector', label: '글 목록 위치', hint: 'RSS가 없는 카페에서 글 제목 링크가 있는 위치. ' + POS_HINT, ph: '예: .article-board a.article' },
-        { key: 'cookie', label: '로그인 쿠키', hint: '비공개 카페만 필요합니다. 없으면 비워두세요.', ph: '' },
         { key: 'max_items', label: '한 번에 가져올 글 수', hint: '비우면 30개', ph: '30' },
       ],
       login_required: [
@@ -430,7 +442,6 @@ export function mountApp(root, ctx) {
     };
     const advInputs = {};                       // key -> input
     const advWrap = el('div', {});
-    const meta0 = (editing && editing.metadata) || {};
     function buildAdvanced(type) {
       clear(advWrap); Object.keys(advInputs).forEach(k => delete advInputs[k]);
       (ADV[type] || []).forEach(spec => {
@@ -465,6 +476,7 @@ export function mountApp(root, ctx) {
 
     const syncType = () => {
       credBlock.hidden = f.type.value !== 'login_required';
+      naverCredBlock.hidden = f.type.value !== 'naver';
       typeHint.textContent = TYPE_HINTS[f.type.value] || '';
       buildAdvanced(f.type.value);
       advDetails.open = f.type.value === 'naver' || f.type.value === 'login_required';
@@ -481,7 +493,7 @@ export function mountApp(root, ctx) {
           groupBox,
           el('small', { class: 'faint', text: '고른 구분값 모두에서 이 사이트의 글이 보입니다.' }),
         ]),
-        credBlock, advDetails,
+        credBlock, naverCredBlock, advDetails,
         el('label', { class: 'checkbox' }, [f.active, '활성화 (꺼두면 수집하지 않음)']),
         el('div', { class: 'form__actions' }, [editing ? el('button', { class: 'btn btn--ghost', onclick: () => { state.editingSource = null; renderView(); } }, ['취소']) : null, submitBtn]),
       ]),
@@ -490,6 +502,8 @@ export function mountApp(root, ctx) {
       f.name.value = editing.name; f.url.value = editing.url;
       f.type.value = editing.type; f.active.checked = editing.active !== false;
       if (editing.type === 'login_required' && editing.credential_id) credStatus.textContent = '✓ 로그인 정보가 등록되어 있습니다. 새로 입력하면 교체됩니다.';
+      if (editing.type === 'naver' && editing.credential_id) naverCredStatus.textContent = '✓ 암호화된 네이버 쿠키가 등록되어 있습니다. 새로 입력하면 교체됩니다.';
+      if (editing.type === 'naver' && hasLegacyNaverCookie) naverCredStatus.textContent = '⚠ 예전 방식의 평문 쿠키가 있습니다. 저장하려면 쿠키를 다시 입력해 암호화하세요.';
     }
     syncType();
 
@@ -498,6 +512,17 @@ export function mountApp(root, ctx) {
       if (!name || !url) { toast('사이트명과 URL을 입력하세요.', { variant: 'danger' }); return; }
       const group_ids = groupChecks.filter(l => l.firstChild.checked).map(l => l.firstChild.value);
       if (!group_ids.length) { toast('구분값을 하나 이상 선택하세요.', { variant: 'danger' }); return; }
+      const hasCredentialUser = !!f.credUser.value.trim();
+      const hasCredentialPassword = !!f.credPass.value;
+      if (f.type.value === 'login_required' && isAdmin && hasCredentialUser !== hasCredentialPassword) {
+        toast('로그인 아이디와 비밀번호를 모두 입력하세요. 한쪽만 바꾸면 기존 정보가 손상될 수 있습니다.', { variant: 'danger' });
+        return;
+      }
+      const hasNaverCookie = !!f.naverCookie.value;
+      if (f.type.value === 'naver' && hasLegacyNaverCookie && !hasNaverCookie) {
+        toast('기존 평문 쿠키를 암호화하려면 네이버 로그인 쿠키를 다시 입력해야 합니다.', { variant: 'danger' });
+        return;
+      }
       // 자세한 설정 → metadata. 전문가용 JSON을 직접 고쳤다면 그쪽을 그대로 쓴다.
       let metadata, selector = editing ? editing.selector || '' : '';
       if (metaTouched) {
@@ -513,23 +538,58 @@ export function mountApp(root, ctx) {
           else metadata[key] = /^(max_items)$/.test(key) ? (parseInt(v, 10) || 0) : v;
         }
       }
-      const base = editing || { id: '', consecutive_failures: 0, last_error: null };
-      const payload = { ...base, name, url, selector, type: f.type.value, group_ids, active: f.active.checked, metadata };
-      delete payload.group_id;   // 단일 구분값 시절의 잔재 제거
-      let s = await adapter.saveSource(payload);
-      if (s.type === 'login_required' && isAdmin && (f.credUser.value.trim() || f.credPass.value)) {
+      // 쿠키는 전문가 JSON에 입력해도 평문 저장하지 않는다.
+      delete metadata.cookie;
+      delete metadata.cookie_header;
+      delete metadata.cookies;
+      let encryptedCredential = null;
+      if (isAdmin && ((f.type.value === 'login_required' && hasCredentialUser && hasCredentialPassword) || (f.type.value === 'naver' && hasNaverCookie))) {
         try {
           const pass = await ensurePassphrase();
-          if (pass) {
-            const { encryptSecret } = await import('../util/crypto.js');
-            const cred = await adapter.saveCredential({
-              id: s.credential_id || '', source_id: s.id,
+          if (!pass) return;
+          const { encryptSecret } = await import('../util/crypto.js');
+          encryptedCredential = f.type.value === 'naver'
+            ? { cookie_encrypted: await encryptSecret(pass, f.naverCookie.value) }
+            : {
               username_encrypted: await encryptSecret(pass, f.credUser.value.trim()),
               password_encrypted: await encryptSecret(pass, f.credPass.value),
-            });
-            s = await adapter.saveSource({ ...s, credential_id: cred.id });
-          }
-        } catch (e) { toast('자격증명 저장 실패: ' + (e.message || e), { variant: 'danger' }); }
+            };
+        } catch (e) {
+          toast('로그인정보 암호화 실패: ' + (e.message || e), { variant: 'danger' });
+          return;
+        }
+      }
+      const base = editing || { id: '', consecutive_failures: 0, last_error: null };
+      const initialMetadata = { ...metadata };
+      // 기존 평문 쿠키는 암호화 credential 저장이 성공할 때까지 잠시 유지한다.
+      if (hasLegacyNaverCookie && encryptedCredential) {
+        for (const key of ['cookie', 'cookie_header', 'cookies']) {
+          if (rawMeta0[key] != null) initialMetadata[key] = rawMeta0[key];
+        }
+      }
+      const payload = { ...base, name, url, selector, type: f.type.value, group_ids, active: f.active.checked, metadata: initialMetadata };
+      delete payload.group_id;   // 단일 구분값 시절의 잔재 제거
+      const credentialTypeChanged = !!(editing && editing.credential_id && editing.type !== f.type.value);
+      const supportsCredential = f.type.value === 'login_required' || f.type.value === 'naver';
+      const obsoleteCredentialId = (!supportsCredential || credentialTypeChanged) ? payload.credential_id : null;
+      if (obsoleteCredentialId) delete payload.credential_id;
+      let s = await adapter.saveSource(payload);
+      if (encryptedCredential) {
+        try {
+          const cred = await adapter.saveCredential({
+            id: obsoleteCredentialId ? '' : (s.credential_id || ''),
+            source_id: s.id,
+            ...encryptedCredential,
+          });
+          s = await adapter.saveSource({ ...s, credential_id: cred.id, metadata });
+        } catch (e) {
+          toast('로그인정보 저장 실패: ' + (e.message || e), { variant: 'danger' });
+          return;
+        }
+      }
+      if (obsoleteCredentialId && isAdmin && adapter.deleteCredential) {
+        try { await adapter.deleteCredential(obsoleteCredentialId); }
+        catch (e) { toast('예전 로그인정보 정리 실패: ' + (e.message || e), { variant: 'danger' }); }
       }
       toast(editing ? '수정했습니다.' : 'URL을 등록했습니다.', { variant: 'success' });
       state.editingSource = null;
@@ -549,7 +609,13 @@ export function mountApp(root, ctx) {
         el('div', { class: 'row__actions' }, [
           iconBtn('edit', '편집', () => { state.editingSource = s; renderView(); viewEl.scrollTo({ top: 0, behavior: 'smooth' }); }),
           iconBtn(s.active !== false ? 'x' : 'check', s.active !== false ? '비활성화' : '활성화', async () => { await adapter.saveSource({ ...s, active: !(s.active !== false) }); }),
-          iconBtn('trash', '삭제', async () => { if (await confirmDialog({ title: 'URL 삭제', message: `"${s.name}"을(를) 삭제할까요?`, confirmLabel: '삭제', danger: true })) { await adapter.deleteSource(s.id); toast('삭제했습니다.'); } }),
+          iconBtn('trash', '삭제', async () => {
+            if (s.credential_id && !isAdmin) { toast('로그인정보가 연결된 URL은 관리자만 삭제할 수 있습니다.', { variant: 'danger' }); return; }
+            if (await confirmDialog({ title: 'URL 삭제', message: `"${s.name}"을(를) 삭제할까요?`, confirmLabel: '삭제', danger: true })) {
+              try { await adapter.deleteSource(s.id); toast('삭제했습니다.'); }
+              catch (e) { toast(e.message || '삭제에 실패했습니다.', { variant: 'danger' }); }
+            }
+          }),
         ]),
       ]);
     }) : [emptyState('등록된 URL이 없어요', '왼쪽 양식에서 첫 모니터링 대상을 추가하세요.', 'link')];
@@ -633,15 +699,6 @@ export function mountApp(root, ctx) {
 
   /* ---------- MANAGE: users ---------- */
   function renderUsers(panel) {
-    const email = el('input', { class: 'input', type: 'email', placeholder: '가족 이메일' });
-    const name = el('input', { class: 'input', placeholder: '이름' });
-    const role = el('select', { class: 'select' }, [el('option', { value: 'member' }, ['구성원']), el('option', { value: 'admin' }, ['관리자'])]);
-    const add = async () => {
-      const e = email.value.trim(); if (!e) { toast('이메일을 입력하세요.', { variant: 'danger' }); return; }
-      if (data.users.some(u => u.email.toLowerCase() === e.toLowerCase())) { toast('이미 등록된 이메일입니다.', { variant: 'danger' }); return; }
-      await adapter.saveUser({ id: '', email: e, name: name.value.trim() || e.split('@')[0], role: role.value, notify_email: true, notify_sources: [] });
-      toast('사용자를 추가했습니다.', { variant: 'success' });
-    };
     const rows = data.users.map(u => {
       const sites = u.notify_sources || []; const notifyText = !u.notify_email ? '알림 꺼짐' : (sites.length ? `${sites.length}개 사이트 알림` : '알림 받을 사이트 미선택');
       return el('div', { class: 'row' }, [
@@ -653,9 +710,13 @@ export function mountApp(root, ctx) {
         el('div', { class: 'row__actions' }, [iconBtn('edit', '편집', () => editUser(u)), iconBtn('trash', '삭제', () => removeUser(u), 'btn--icon btn--subtle btn--sm')]),
       ]);
     });
-    mount(panel, el('div', { class: 'admingrid' }, [
-      el('div', { class: 'card' }, [el('h2', { class: 'card__title', text: '사용자 추가' }), el('div', { class: 'form' }, [field('이메일', email), field('이름', name), field('권한', role), el('div', { class: 'form__actions' }, [el('button', { class: 'btn btn--primary', onclick: add }, [icon('plus'), '추가'])])])]),
-      el('div', { class: 'card' }, [el('h2', { class: 'card__title', text: `가족 구성원 (${data.users.length})` }), el('div', { class: 'rows' }, rows)]),
+    mount(panel, el('div', { class: 'card', style: { maxWidth: '760px' } }, [
+      el('h2', { class: 'card__title', text: `가족 구성원 (${data.users.length})` }),
+      el('div', { class: 'banner', style: { marginBottom: '14px' } }, [
+        icon('user'),
+        '새 가족은 앱 주소에서 먼저 로그인해 가입 신청을 해야 합니다. 이후 ‘가입 신청’ 메뉴에서 승인하세요.',
+      ]),
+      el('div', { class: 'rows' }, rows),
     ]));
     function editUser(u) {
       const nm = el('input', { class: 'input', value: u.name });

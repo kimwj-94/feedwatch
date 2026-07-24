@@ -270,7 +270,7 @@ d.table(
         ["FIREBASE_SERVICE_ACCOUNT_JSON", "위 서비스 계정 키 JSON 전체 내용"],
         ["FEEDWATCH_ADMIN_EMAIL", "기본 관리자 이메일(첫 실행 때 한 번 쓰입니다)"],
         ["YOUTUBE_API_KEY", "(선택) 유튜브는 채널 주소만으로 수집됩니다. 자동 인식이 안 될 때만 필요"],
-        ["FEEDWATCH_CRED_PASSPHRASE", "(로그인 사이트용) 웹에서 정한 '수집 비밀번호'와 동일하게"],
+        ["FEEDWATCH_CRED_PASSPHRASE", "(로그인 사이트·비공개 네이버 카페용) 웹에서 정한 '수집 비밀번호'와 동일하게"],
         ["SMTP_HOST / SMTP_PORT / SMTP_USERNAME / SMTP_PASSWORD / SMTP_FROM", "이메일(SMTP) 발송 정보"],
     ],
     [3600, 5426],
@@ -278,8 +278,8 @@ d.table(
 d.steps([
     [R("저장소 "), R("Actions", b=True), R(" 탭 → ‘FeedWatch Crawl’ 워크플로 → "), R("Run workflow", b=True), R(" 로 첫 실행을 눌러 확인합니다. 이후 매일 오전 6시·오후 6시(KST) 자동 실행됩니다.")],
 ])
-d.callout("로그인이 필요한 사이트의 아이디/비밀번호는 웹 관리자(URL 관리)에서 직접 입력합니다. 최초 1회 '수집 비밀번호'를 정하면 브라우저가 그 비밀번호로 암호화해 저장하고, 크롤러는 같은 값(위 FEEDWATCH_CRED_PASSPHRASE)으로 복호화합니다. 평문은 어디에도 저장되지 않습니다.", "note")
-d.callout("메일이 실제로 나가려면 앱의 관리 → 설정 → ‘이메일 발송 방식’이 ‘자동(크롤러 환경설정 사용)’ 이어야 합니다. ‘미리보기’로 두면 파일만 만들고 발송하지 않습니다.", "note")
+d.callout("로그인이 필요한 사이트의 아이디/비밀번호와 비공개 네이버 카페의 로그인 쿠키는 웹 관리자(URL 관리)에서 직접 입력합니다. 최초 1회 '수집 비밀번호'를 정하면 브라우저가 그 값으로 암호화해 저장하고, 크롤러는 같은 값(위 FEEDWATCH_CRED_PASSPHRASE)으로 복호화합니다. 평문은 어디에도 저장되지 않습니다.", "note")
+d.callout("메일이 실제로 나가려면 앱의 관리 → 설정 → ‘이메일 발송 방식’이 ‘자동(크롤러 환경설정 사용)’ 이어야 합니다. ‘미리보기’로 두면 파일만 만들고 발송하지 않습니다. SMTP가 일시적으로 실패하면 발송 작업을 남겨 다음 크롤링 때 자동으로 다시 시도합니다.", "note")
 d.callout("인트라넷(외부에서 막힌) 사이트는 GitHub 서버가 못 들어갑니다. 그런 사이트만 내부망 PC에서 python -m crawler.main_crawler 로 직접/예약 실행하세요.", "warn")
 
 d.h("12. STEP 10 — 가족 초대", 1)
