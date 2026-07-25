@@ -4,7 +4,7 @@ import { LocalAdapter } from './data/local.js';
 import { el, mount, clear } from './util/dom.js';
 import { icon, googleMark } from './util/icons.js';
 import { toast, openModal, field, sourceCheckset } from './ui/components.js';
-import { mountApp } from './ui/shell.js';
+import { mountApp } from './ui/shell.js?v=20260725';
 
 const root = document.getElementById('app');
 const SESSION_KEY = 'feedwatch_session';

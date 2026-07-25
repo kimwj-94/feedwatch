@@ -27,7 +27,7 @@ function groupsOf(x) { return (x && x.group_ids) || (x && x.group_id ? [x.group_
 export function mountApp(root, ctx) {
   const { adapter, user } = ctx;
   const isAdmin = user.role === 'admin';
-  const state = { view: 'dashboard', groupId: null, dateFilter: 'all', sort: 'newest', query: '', editingSource: null };
+  const state = { view: 'dashboard', groupId: null, dateFilter: 'all', sort: 'newest', query: '', alertOnly: false, editingSource: null };
   let data = { groups: [], sources: [], items: [], users: [], requests: [], logs: [], config: {} };
   let loaded = false, sidebarOpen = false, lastRefreshed = null;
   let credentialPassphrase = null;
@@ -87,7 +87,7 @@ export function mountApp(root, ctx) {
     const section = (label, items) => el('div', { class: 'side-section' }, [el('div', { class: 'side-label', text: label }), ...items]);
     const navItem = (id, label, ic, badge, hot) => el('button', {
       class: 'nav-item' + (state.view === id ? ' active' : ''), 'aria-current': state.view === id ? 'page' : null,
-      onclick: () => go(id),
+      onclick: () => { if (id === 'new') state.alertOnly = false; go(id); },
     }, [icon(ic), el('span', { style: { flex: '1' }, text: label }), badge != null ? el('span', { class: 'count' + (hot ? ' is-hot' : ''), text: String(badge) }) : null]);
 
     const manageItems = Object.entries(MANAGE_VIEWS)
@@ -157,12 +157,20 @@ export function mountApp(root, ctx) {
       class: 'chip' + (state.groupId === id ? ' active' : ''), 'aria-pressed': String(state.groupId === id),
       onclick: () => { state.groupId = id; renderSubbar(); renderView(); },
     }, [id != null ? el('span', { class: 'swatch-dot', style: { background: `var(--chip-${colorIdx}-fg)` } }) : null, label]);
+    const alertChip = state.view === 'new' && (user.notify_sources || []).length
+      ? el('button', {
+        class: 'chip' + (state.alertOnly ? ' active' : ''),
+        'aria-pressed': String(state.alertOnly),
+        onclick: () => { state.alertOnly = !state.alertOnly; renderSubbar(); renderView(); },
+      }, [icon('bell'), '내 알림만'])
+      : null;
     const dateSeg = el('div', { class: 'seg', role: 'group', 'aria-label': '기간' },
       DATE_FILTERS.map(f => el('button', { class: 'seg__opt', 'aria-pressed': String(state.dateFilter === f.value), onclick: () => { state.dateFilter = f.value; renderSubbar(); renderView(); } }, [f.label])));
     const sortSel = el('select', { class: 'select', style: { width: 'auto', height: '32px' }, 'aria-label': '정렬', onchange: () => { state.sort = sortSel.value; renderView(); } },
       [['newest', '최신순'], ['oldest', '오래된순'], ['source', '사이트별']].map(([v, l]) => el('option', { value: v, selected: state.sort === v ? '' : null }, [l])));
     mount(subbar, [
       groupChip(null, '전체', 0),
+      alertChip,
       ...data.groups.map(g => groupChip(g.id, g.name, groupColorIndex(g, data.groups))),
       el('span', { class: 'spacer' }),
       dateSeg, sortSel,
@@ -183,6 +191,10 @@ export function mountApp(root, ctx) {
   function visibleItems() {
     const v = FEED_VIEWS[state.view];
     let list = data.items.filter(it => v.statuses.includes(it.status));
+    if (state.alertOnly) {
+      const subscribed = user.notify_sources || [];
+      list = list.filter(it => subscribed.includes(it.source_id));
+    }
     if (state.groupId) list = list.filter(it => groupsOf(it).includes(state.groupId));
     if (state.dateFilter !== 'all') list = list.filter(it => withinDateFilter(it.fetched_at, state.dateFilter));
     if (state.query) list = list.filter(it => (it.title + ' ' + it.source_name).toLowerCase().includes(state.query));
@@ -246,15 +258,43 @@ export function mountApp(root, ctx) {
   async function purge(item) { if (!(await confirmDialog({ title: '완전 삭제', message: '이 항목을 완전히 삭제할까요? 되돌릴 수 없습니다.', confirmLabel: '완전삭제', danger: true }))) return; await adapter.purgeItem(item.id); toast('완전히 삭제했습니다.', { variant: 'danger' }); }
 
   /* ---------- DASHBOARD (home) ---------- */
-  function dashLine(it, showTime, unseen) {
+  function dashLine(it, showTime, unseen, allowRead = false) {
     const gm = groupMap(); const gs = groupsOf(it).map(id => gm[id]).filter(Boolean);
     const g = gs[0]; const ci = g ? groupColorIndex(g, data.groups) : 7;
-    return el('a', { class: 'dline' + (unseen ? ' is-unseen' : ''), href: it.url, target: '_blank', rel: 'noopener noreferrer' }, [
+    const markRead = (message) => {
+      if (it.status === ITEM_STATUS.NEW) void setStatus(it, ITEM_STATUS.READ, message);
+    };
+    return el('div', { class: 'dline' + (unseen ? ' is-unseen' : '') }, [
       el('span', { class: `avatar avatar--sm chip--g${ci}`, 'aria-hidden': 'true', text: (it.source_name || '?').trim().charAt(0) }),
-      el('span', { class: 'dline__name', text: it.title }),
+      el('a', {
+        class: 'dline__name',
+        href: it.url,
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        title: '새 창에서 열고 읽음 처리',
+        onclick: () => markRead('글을 열고 읽음 처리했습니다.'),
+      }, [it.title, ' ', icon('external', 'ic')]),
       unseen ? el('span', { class: 'dline__new', title: '직전 방문 이후 도착', text: 'NEW' }) : null,
       el('span', { class: 'dline__sub', title: it.published_at ? `작성 ${localDateTime(it.published_at)}` : '', text: showTime ? relativeTime(it.published_at || it.fetched_at) : gs.map(x => x.name).join(' · ') }),
+      allowRead ? el('button', {
+        class: 'dline__read',
+        type: 'button',
+        title: '읽음 처리',
+        'aria-label': `${it.title} 읽음 처리`,
+        onclick: () => markRead('읽음 처리했습니다.'),
+      }, [icon('check'), el('span', { text: '읽음' })]) : null,
     ]);
+  }
+  async function markAllRead(items) {
+    if (!items.length) return;
+    const ok = await confirmDialog({
+      title: '알림 모두 읽음',
+      message: `내 알림 ${items.length}건을 모두 읽음 처리할까요? 읽은 글은 가족 공용 보관함으로 이동합니다.`,
+      confirmLabel: '모두 읽음',
+    });
+    if (!ok) return;
+    await Promise.all(items.map(it => adapter.setItemStatus(it.id, ITEM_STATUS.READ)));
+    toast(`${items.length}건을 모두 읽음 처리했습니다.`);
   }
   function renderDashboard() {
     const gm = groupMap();
@@ -269,7 +309,7 @@ export function mountApp(root, ctx) {
     const isUnseen = (it) => (Date.parse(it.fetched_at) || 0) > since;
     const myUnseen = myNew.filter(isUnseen);
     const recent = [...newItems].sort((a, b) => (b.fetched_at || '').localeCompare(a.fetched_at || '')).slice(0, 6);
-    const goNew = (patch) => { Object.assign(state, { groupId: null, dateFilter: 'all', query: '' }, patch || {}); go('new'); };
+    const goNew = (patch) => { Object.assign(state, { groupId: null, dateFilter: 'all', query: '', alertOnly: false }, patch || {}); go('new'); };
 
     const statCard = (num, lbl, ic, klass, onClick) => el('button', { class: 'stat', onclick: onClick }, [
       el('span', { class: `stat__ico ${klass}` }, [icon(ic)]),
@@ -310,11 +350,17 @@ export function mountApp(root, ctx) {
 
     // 미확인 글을 위로 정렬해 '내 미확인'을 한눈에
     const myList = [...myNew].sort((a, b) => (isUnseen(b) - isUnseen(a)) || (b.fetched_at || '').localeCompare(a.fetched_at || '')).slice(0, 5);
-    const myCard = el('div', { class: 'card' }, [
-      el('h2', { class: 'card__title' }, ['내 알림 ', el('span', { class: 'count' + (myNew.length ? ' is-hot' : ''), text: String(myNew.length) }), myUnseen.length ? el('span', { class: 'card__badge', text: `미확인 ${myUnseen.length}` }) : null]),
+    const myCard = el('div', { class: 'card card--notifications' }, [
+      el('div', { class: 'card__head' }, [
+        el('h2', { class: 'card__title' }, ['내 알림 ', el('span', { class: 'count' + (myNew.length ? ' is-hot' : ''), text: String(myNew.length) }), myUnseen.length ? el('span', { class: 'card__badge', text: `미확인 ${myUnseen.length}` }) : null]),
+        myNew.length ? el('div', { class: 'card__actions' }, [
+          el('button', { class: 'btn btn--sm btn--subtle', type: 'button', onclick: () => markAllRead(myNew) }, [icon('check'), '모두 읽음']),
+          el('button', { class: 'btn btn--sm btn--subtle', type: 'button', onclick: () => goNew({ alertOnly: true }) }, [icon('list'), '더 보기']),
+        ]) : null,
+      ]),
       mySrc.length ? null : el('button', { class: 'banner banner--warn', style: { width: '100%', textAlign: 'left', marginBottom: '10px' }, onclick: () => ctx.profile() },
         [icon('bell'), '알림 받을 사이트를 아직 고르지 않았습니다. 눌러서 선택하세요.']),
-      el('div', { class: 'dlist' }, myList.length ? myList.map(it => dashLine(it, true, isUnseen(it))) : [el('div', { class: 'empty__hint', text: '새 글이 없습니다.' })]),
+      el('div', { class: 'dlist' }, myList.length ? myList.map(it => dashLine(it, true, isUnseen(it), true)) : [el('div', { class: 'empty__hint', text: '확인할 새 글이 없습니다.' })]),
     ]);
 
     const lastLog = data.logs[0];
