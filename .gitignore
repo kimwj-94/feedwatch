@@ -1,5 +1,6 @@
 .env
 firebase_config.json
+!web/firebase_config.json
 service_account.json
 token.json
 data/*.json
@@ -11,3 +12,8 @@ dist/
 build/
 *.spec
 playwright-report/
+node_modules/
+.testdeps/
+.runtime/
+firestore-debug.log
+firebase-debug.log

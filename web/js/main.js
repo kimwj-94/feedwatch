@@ -4,7 +4,7 @@ import { LocalAdapter } from './data/local.js';
 import { el, mount, clear } from './util/dom.js';
 import { icon, googleMark } from './util/icons.js';
 import { toast, openModal, field, sourceCheckset } from './ui/components.js';
-import { mountApp } from './ui/shell.js?v=20260725';
+import { mountApp } from './ui/shell.js?v=20260730';
 
 const root = document.getElementById('app');
 const SESSION_KEY = 'feedwatch_session';
@@ -27,6 +27,10 @@ function clearSession() { localStorage.removeItem(SESSION_KEY); }
 
 /* ---------------- App state ---------------- */
 let adapter, mode, currentUser, viewCleanup = null, seenBaseline = null;
+window.addEventListener('feedwatch:push', event => {
+  const notice = event.detail?.notification || {};
+  toast(notice.title || '새 글 알림이 도착했습니다.', { variant: 'success' });
+});
 function teardownView() { if (viewCleanup) { try { viewCleanup(); } catch (e) { console.error(e); } viewCleanup = null; } }
 
 // 로그인 확정: '내 미확인' 기준선(직전 방문 시각)을 잡고 화면을 띄운 뒤, 이번 방문 시각을 기록한다.
@@ -77,9 +81,15 @@ async function bootCloud(cfg) {
     try {
       const u = await adapter.resolveAppUser(fbUser);
       if (u) { await adapter.startListeners(u); return enterAs(u); }
-      await adapter.createRequest({ email: fbUser.email, name: fbUser.displayName || (fbUser.email || '').split('@')[0], provider: 'firebase', uid: fbUser.uid }).catch(() => {});
+      await adapter.createRequest({ email: fbUser.email, name: fbUser.displayName || (fbUser.email || '').split('@')[0], provider: 'firebase', uid: fbUser.uid });
       return renderPending(fbUser.email);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      await adapter.signOut().catch(() => {});
+      await renderLogin();
+      toast('가입 신청을 저장하지 못했습니다. 네트워크 연결을 확인하고 다시 로그인해 주세요.', { variant: 'danger' });
+      return;
+    }
   }
   renderLogin();
 }
@@ -214,12 +224,30 @@ async function openProfileSettings() {
   const sources = await adapter.listSources().catch(() => []);
   const nameInput = el('input', { class: 'input', value: currentUser.name || '' });
   const notify = el('input', { type: 'checkbox', checked: currentUser.notify_email !== false });
+  const pushInfo = adapter.pushCapability
+    ? await adapter.pushCapability().catch(() => ({ configured: false, supported: false, registered: false }))
+    : { configured: false, supported: false, registered: false };
+  const push = el('input', {
+    type: 'checkbox',
+    checked: !!pushInfo.registered,
+    disabled: mode !== 'cloud' || !pushInfo.configured || !pushInfo.supported || pushInfo.needsInstall,
+  });
+  let pushHint = '이 휴대폰·PC의 잠금화면과 알림센터에서 새 글 팝업을 받습니다.';
+  if (mode !== 'cloud') pushHint = '데모 모드에서는 실제 푸시 알림을 등록하지 않습니다.';
+  else if (!pushInfo.configured) pushHint = '관리자가 Firebase 웹 푸시 인증서(VAPID)를 설정하면 사용할 수 있습니다.';
+  else if (pushInfo.needsInstall) pushHint = 'iPhone/iPad: 공유 버튼 → 홈 화면에 추가 → 홈 화면의 FeedWatch에서 다시 켜세요.';
+  else if (!pushInfo.supported) pushHint = '이 브라우저는 웹 푸시를 지원하지 않습니다.';
+  else if (pushInfo.permission === 'denied') pushHint = '브라우저 설정에서 FeedWatch 알림 차단을 해제한 뒤 다시 켜세요.';
   const picker = sourceCheckset(sources, currentUser.notify_sources || []);
   openModal({
     title: '내 설정',
     body: [
       field('표시 이름', nameInput),
       el('label', { class: 'checkbox' }, [notify, '새 글 이메일 알림 받기']),
+      el('div', { class: 'field' }, [
+        el('label', { class: 'checkbox' }, [push, '이 기기에서 모바일·PC 팝업 알림 받기']),
+        el('div', { class: 'field__hint', text: pushHint }),
+      ]),
       el('div', { class: 'field' }, [
         el('label', { class: 'field__label', text: '알림 받을 사이트' }),
         picker.node,
@@ -230,7 +258,25 @@ async function openProfileSettings() {
       { label: '저장', variant: 'primary', autofocus: true, onClick: async () => {
         const name = nameInput.value.trim() || currentUser.name;
         const notify_sources = picker.get();
-        const updated = { ...currentUser, name, notify_email: notify.checked, notify_sources };
+        let push_fids = currentUser.push_fids || [];
+        try {
+          if (push.checked && !pushInfo.registered) {
+            const result = await adapter.enablePush(currentUser);
+            push_fids = result.push_fids;
+          } else if (!push.checked && pushInfo.registered) {
+            push_fids = await adapter.disablePush(currentUser);
+          }
+        } catch (e) {
+          toast(e.message || '팝업 알림 설정에 실패했습니다.', { variant: 'danger' });
+          return false;
+        }
+        const updated = {
+          ...currentUser, name,
+          notify_email: notify.checked,
+          notify_sources,
+          notify_push: push_fids.length > 0,
+          push_fids,
+        };
         try { await adapter.updateProfile(updated); } catch (e) { toast(e.message || '저장에 실패했습니다.', { variant: 'danger' }); return false; }
         currentUser = updated; renderApp(); toast('저장했습니다.', { variant: 'success' });
       } },

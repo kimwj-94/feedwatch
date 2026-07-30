@@ -8,8 +8,10 @@ from collections import OrderedDict
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
+from urllib.parse import urljoin
 
 from datetime import timedelta, timezone
+from firebase_admin import messaging
 
 from shared.config import ROOT_DIR, Settings
 from shared.models import Item, NotificationJob, User, parse_dt, utc_now
@@ -100,6 +102,77 @@ def _subject(items: list[Item]) -> str:
     if len(names) == 1:
         return f"[FeedWatch] {names[0]} 새 글 {len(items)}건"
     return f"[FeedWatch] {names[0]} 외 {len(names) - 1}곳 새 글 {len(items)}건"
+
+
+def _push_body(items: list[Item]) -> str:
+    first = items[0].title
+    return first if len(items) == 1 else f"{first} 외 {len(items) - 1}건"
+
+
+def notify_push_items(
+    settings: Settings,
+    repository: BaseRepository,
+    users: list[User],
+    items: list[Item],
+) -> list[str]:
+    """FCM 웹 푸시를 사용자별 구독 사이트와 등록 기기에 보낸다.
+
+    이메일은 재시도 대기열로 확실한 전달을 맡고, 푸시는 잠금화면에서 빠르게
+    발견하도록 보조한다. 만료된 FID는 응답을 보고 사용자 문서에서 제거한다.
+    """
+    recipients = [u for u in users if u.notify_push and u.push_fids]
+    targeted = [(u, _filter_for_user(items, u)) for u in recipients]
+    targeted = [(u, mine) for u, mine in targeted if mine]
+    if not targeted:
+        return []
+
+    link = settings.app_url if settings.app_url.startswith("https://") else None
+    icon = urljoin(link, "icon.svg") if link else None
+    messages: list[messaging.Message] = []
+    owners: list[tuple[User, str]] = []
+    for user, mine in targeted:
+        webpush = messaging.WebpushConfig(
+            headers={"Urgency": "high"},
+            notification=messaging.WebpushNotification(
+                title=_subject(mine).replace("[FeedWatch] ", ""),
+                body=_push_body(mine),
+                icon=icon,
+                badge=icon,
+                tag="feedwatch-new-items",
+                renotify=True,
+            ),
+            fcm_options=messaging.WebpushFCMOptions(link=link) if link else None,
+        )
+        for fid in list(dict.fromkeys(user.push_fids))[:5]:
+            messages.append(
+                messaging.Message(
+                    data={"link": link or "", "new_items": str(len(mine))},
+                    webpush=webpush,
+                    fid=fid,
+                )
+            )
+            owners.append((user, fid))
+
+    notes: list[str] = []
+    stale: dict[str, set[str]] = {}
+    for start in range(0, len(messages), 500):
+        batch = messaging.send_each(messages[start : start + 500])
+        for (user, fid), result in zip(owners[start : start + 500], batch.responses):
+            if result.success:
+                continue
+            exc = result.exception
+            notes.append(f"푸시 알림 실패({user.email}) — {type(exc).__name__}: {exc}")
+            if isinstance(exc, messaging.UnregisteredError):
+                stale.setdefault(user.id, set()).add(fid)
+
+    for user in recipients:
+        invalid = stale.get(user.id)
+        if invalid:
+            repository.update_user_push_fids(
+                user.id,
+                [fid for fid in user.push_fids if fid not in invalid],
+            )
+    return notes
 
 
 def notify_new_items(

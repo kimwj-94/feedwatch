@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from crawler.main_crawler import run
+from crawler.main_crawler import public_error_message, run
 from shared.config import Settings
 from shared.models import Group, Item, Source
 
@@ -26,6 +26,7 @@ def make_settings(temp_dir: str) -> Settings:
         smtp_password="secret",
         smtp_from="sender@example.com",
         email_provider="smtp",
+        app_url="https://example.com/feedwatch/",
         gmail_credentials=root / "client_secret.json",
         gmail_token=root / "token.json",
         google_oauth_credentials=root / "oauth.json",
@@ -81,6 +82,12 @@ class FakeRepository:
 
 
 class FirstCrawlTests(unittest.TestCase):
+    def test_public_error_message_redacts_urls_and_secret_query_values(self) -> None:
+        message = "GET https://private.example.com/path?token=secret failed password=hunter2"
+        redacted = public_error_message(message)
+        self.assertNotIn("private.example.com", redacted)
+        self.assertNotIn("hunter2", redacted)
+
     def test_first_crawl_is_marked_complete_only_after_items_are_saved(self) -> None:
         source = Source(
             id="src_1",

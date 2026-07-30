@@ -746,11 +746,18 @@ export function mountApp(root, ctx) {
   /* ---------- MANAGE: users ---------- */
   function renderUsers(panel) {
     const rows = data.users.map(u => {
-      const sites = u.notify_sources || []; const notifyText = !u.notify_email ? '알림 꺼짐' : (sites.length ? `${sites.length}개 사이트 알림` : '알림 받을 사이트 미선택');
+      const sites = u.notify_sources || [];
+      const notifyText = sites.length ? `${sites.length}개 사이트 알림` : '알림 받을 사이트 미선택';
+      const pushCount = (u.push_fids || []).length;
       return el('div', { class: 'row' }, [
         el('span', { class: 'avatar avatar--sm chip--g0', 'aria-hidden': 'true', text: (u.name || '?').trim().charAt(0) }),
         el('div', { class: 'row__main' }, [
-          el('div', { class: 'row__title' }, [u.name, el('span', { class: 'tag', text: u.role === 'admin' ? '관리자' : '구성원' }), el('span', { class: u.notify_email ? 'tag tag--on' : 'tag tag--off', text: u.notify_email ? '알림 ON' : '알림 OFF' })]),
+          el('div', { class: 'row__title' }, [
+            u.name,
+            el('span', { class: 'tag', text: u.role === 'admin' ? '관리자' : '구성원' }),
+            el('span', { class: u.notify_email ? 'tag tag--on' : 'tag tag--off', text: u.notify_email ? '메일 ON' : '메일 OFF' }),
+            el('span', { class: pushCount ? 'tag tag--on' : 'tag tag--off', text: pushCount ? `팝업 ${pushCount}기기` : '팝업 OFF' }),
+          ]),
           el('div', { class: 'row__sub', text: `${u.email} · ${notifyText}` }),
         ]),
         el('div', { class: 'row__actions' }, [iconBtn('edit', '편집', () => editUser(u)), iconBtn('trash', '삭제', () => removeUser(u), 'btn--icon btn--subtle btn--sm')]),
@@ -824,13 +831,23 @@ export function mountApp(root, ctx) {
     const days = el('input', { class: 'input', type: 'number', min: '1', max: '365', value: String(c.auto_archive_days ?? 7) });
     const trash = el('input', { class: 'input', type: 'number', min: '0', max: '365', value: String(c.trash_retention_days ?? 30) });
     const emailEnabled = el('input', { type: 'checkbox', checked: c.email_enabled !== false });
+    const pushEnabled = el('input', { type: 'checkbox', checked: c.push_enabled !== false });
     const provider = el('select', { class: 'select' }, [['', '자동 (크롤러 환경설정 사용) · 권장'], ['preview', '미리보기 (HTML 파일)'], ['smtp', 'SMTP'], ['gmail', 'Gmail API']].map(([v, l]) => el('option', { value: v }, [l]))); provider.value = c.email_provider || '';
-    const save = async () => { await adapter.saveConfig({ auto_archive_days: Math.max(1, Number(days.value) || 7), trash_retention_days: Math.max(0, parseInt(trash.value, 10) || 0), email_enabled: emailEnabled.checked, email_provider: provider.value }); toast('설정을 저장했습니다.', { variant: 'success' }); };
+    const save = async () => {
+      await adapter.saveConfig({
+        auto_archive_days: Math.max(1, Number(days.value) || 7),
+        trash_retention_days: Math.max(0, parseInt(trash.value, 10) || 0),
+        email_enabled: emailEnabled.checked,
+        email_provider: provider.value,
+        push_enabled: pushEnabled.checked,
+      });
+      toast('설정을 저장했습니다.', { variant: 'success' });
+    };
     const diag = el('pre', { class: 'diag' });
     const ln = (l, v, cls) => el('span', {}, [`${l}: `, el('span', { class: cls, text: v }), '\n']);
-    diag.append(ln('모드', ctx.mode === 'cloud' ? 'CLOUD (Firestore)' : 'DEMO (로컬 샘플)', 'ok'), ln('자동 보관 기간', `${c.auto_archive_days ?? 7}일`, 'ok'), ln('휴지통 보관', `${c.trash_retention_days ?? 30}일`, 'ok'), ln('이메일 알림', c.email_enabled === false ? '꺼짐' : `켜짐 · ${c.email_provider || '크롤러 환경설정'}`, c.email_enabled === false ? 'warn' : 'ok'),ln('등록 URL', `${data.sources.length}개 (활성 ${data.sources.filter(s => s.active !== false).length})`, 'ok'), ln('구성원', `${data.users.length}명`, 'ok'), ln('알림 수신', `${data.users.filter(u => u.notify_email).length}명`, 'ok'));
+    diag.append(ln('모드', ctx.mode === 'cloud' ? 'CLOUD (Firestore)' : 'DEMO (로컬 샘플)', 'ok'), ln('자동 보관 기간', `${c.auto_archive_days ?? 7}일`, 'ok'), ln('휴지통 보관', `${c.trash_retention_days ?? 30}일`, 'ok'), ln('이메일 알림', c.email_enabled === false ? '꺼짐' : `켜짐 · ${c.email_provider || '크롤러 환경설정'}`, c.email_enabled === false ? 'warn' : 'ok'), ln('팝업 알림', c.push_enabled === false ? '꺼짐' : '켜짐', c.push_enabled === false ? 'warn' : 'ok'), ln('등록 URL', `${data.sources.length}개 (활성 ${data.sources.filter(s => s.active !== false).length})`, 'ok'), ln('구성원', `${data.users.length}명`, 'ok'), ln('메일 수신', `${data.users.filter(u => u.notify_email).length}명`, 'ok'), ln('팝업 기기', `${data.users.reduce((n, u) => n + (u.push_fids || []).length, 0)}대`, 'ok'));
     mount(panel, el('div', { class: 'admingrid' }, [
-      el('div', { class: 'card' }, [el('h2', { class: 'card__title', text: '동작 설정' }), el('div', { class: 'form' }, [field('자동 보관 기간 (일)', days, '신규가 이 기간 미처리되면 보관함(미처리)으로 자동 이동합니다.'), field('휴지통 보관 기간 (일)', trash, '삭제한 글을 이 기간 후 영구 삭제합니다(클라우드 크롤러 실행 시). 0이면 자동 삭제 안 함.'), el('label', { class: 'checkbox' }, [emailEnabled, '새 글 이메일 알림 발송']), field('이메일 발송 방식', provider, '‘자동’이면 크롤러 환경(.env / GitHub Secrets)의 EMAIL_PROVIDER를 그대로 씁니다. 발송 계정·비밀번호도 그곳에서 설정합니다.'), el('div', { class: 'form__actions' }, [el('button', { class: 'btn btn--primary', onclick: save }, ['설정 저장'])])])]),
+      el('div', { class: 'card' }, [el('h2', { class: 'card__title', text: '동작 설정' }), el('div', { class: 'form' }, [field('자동 보관 기간 (일)', days, '신규가 이 기간 미처리되면 보관함(미처리)으로 자동 이동합니다.'), field('휴지통 보관 기간 (일)', trash, '삭제한 글을 이 기간 후 영구 삭제합니다(클라우드 크롤러 실행 시). 0이면 자동 삭제 안 함.'), el('label', { class: 'checkbox' }, [emailEnabled, '새 글 이메일 알림 발송']), el('label', { class: 'checkbox' }, [pushEnabled, '새 글 모바일·PC 팝업 알림 발송']), field('이메일 발송 방식', provider, '‘자동’이면 크롤러 환경(.env / GitHub Secrets)의 EMAIL_PROVIDER를 그대로 씁니다. 발송 계정·비밀번호도 그곳에서 설정합니다.'), el('div', { class: 'form__actions' }, [el('button', { class: 'btn btn--primary', onclick: save }, ['설정 저장'])])])]),
       el('div', { class: 'card' }, [el('h2', { class: 'card__title', text: '환경 진단' }), diag, ctx.mode === 'demo' ? el('button', { class: 'btn btn--ghost', style: { marginTop: '12px' }, onclick: async () => { if (await confirmDialog({ title: '데모 초기화', message: '데모 데이터를 처음 상태로 되돌릴까요?', confirmLabel: '초기화', danger: true })) { adapter.resetDemo && adapter.resetDemo(); location.reload(); } } }, [icon('refresh'), '데모 데이터 초기화']) : null]),
     ]));
   }

@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from crawler.notifier import (
@@ -10,6 +11,7 @@ from crawler.notifier import (
     build_email_html,
     deliver_pending_notifications,
     notify_failures,
+    notify_push_items,
     queue_new_item_notifications,
 )
 from shared.config import Settings
@@ -33,6 +35,7 @@ def make_settings(temp_dir: str) -> Settings:
         smtp_password="secret",
         smtp_from="sender@example.com",
         email_provider="smtp",
+        app_url="https://example.com/feedwatch/",
         gmail_credentials=root / "client_secret.json",
         gmail_token=root / "token.json",
         google_oauth_credentials=root / "oauth.json",
@@ -63,6 +66,31 @@ class NotifierTests(unittest.TestCase):
     def test_subscription_filters_by_source(self) -> None:
         user = User(id="user_1", name="User", email="user@example.com", notify_sources=["src_1"])
         self.assertEqual(_filter_for_user([make_item()], user), [make_item()])
+
+    def test_push_targets_only_registered_subscribed_devices(self) -> None:
+        user = User(
+            id="user_1",
+            name="User",
+            email="user@example.com",
+            notify_sources=["src_1"],
+            notify_push=True,
+            push_fids=["fid-1"],
+        )
+        repository = LocalJsonRepository(Path(tempfile.mkdtemp()) / "store.json", "admin@example.com")
+        result = SimpleNamespace(
+            responses=[SimpleNamespace(success=True, exception=None)]
+        )
+        with patch("crawler.notifier.messaging.send_each", return_value=result) as send:
+            notes = notify_push_items(
+                make_settings(str(repository.path.parent)),
+                repository,
+                [user],
+                [make_item()],
+            )
+        self.assertEqual(notes, [])
+        sent = send.call_args.args[0]
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0].fid, "fid-1")
 
     def test_email_html_escapes_feed_content(self) -> None:
         body = build_email_html([make_item()])

@@ -34,6 +34,7 @@ class Settings:
     smtp_password: str
     smtp_from: str
     email_provider: str
+    app_url: str
     gmail_credentials: Path
     gmail_token: Path
     google_oauth_credentials: Path
@@ -86,6 +87,7 @@ def load_settings() -> Settings:
         smtp_password=os.getenv("SMTP_PASSWORD", ""),
         smtp_from=os.getenv("SMTP_FROM", ""),
         email_provider=os.getenv("EMAIL_PROVIDER", "preview").lower(),
+        app_url=os.getenv("FEEDWATCH_APP_URL", "").strip(),
         gmail_credentials=gmail_credentials,
         gmail_token=gmail_token,
         google_oauth_credentials=google_oauth_credentials,

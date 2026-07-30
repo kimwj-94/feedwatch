@@ -157,7 +157,10 @@ export class LocalAdapter extends Adapter {
     // 이미 등록된 계정이면 권한을 건드리지 않고 신청만 정리한다(클라우드와 동일 동작).
     const email = (req.email || '').toLowerCase();
     const existing = this.data.users.find(u => u.id === req.uid || (u.email || '').toLowerCase() === email);
-    const user = existing || await this.saveUser({ id: req.uid || '', email: req.email, name: req.name, role: opts.role || 'member', notify_email: true, notify_sources: [] });
+    const user = existing || await this.saveUser({
+      id: req.uid || '', email: req.email, name: req.name, role: opts.role || 'member',
+      notify_email: true, notify_sources: [], notify_push: false, push_fids: [],
+    });
     this.data.access_requests = this.data.access_requests.filter(r => r.id !== id);
     this._commit();
     return user;
@@ -171,7 +174,13 @@ export class LocalAdapter extends Adapter {
   // 클라우드와 동작을 맞춘다: 본인이 바꿀 수 있는 필드만 기존 문서에 덮어쓴다(role 등은 보존).
   async updateProfile(user) {
     const prev = this.data.users.find(x => x.id === user.id) || {};
-    const patch = { name: user.name || '', notify_email: user.notify_email !== false, notify_sources: user.notify_sources || [] };
+    const patch = {
+      name: user.name || '',
+      notify_email: user.notify_email !== false,
+      notify_sources: user.notify_sources || [],
+      notify_push: user.notify_push === true,
+      push_fids: (user.push_fids || []).slice(0, 5),
+    };
     if (user.last_seen) patch.last_seen = user.last_seen;
     if (user.last_login) patch.last_login = user.last_login;
     return this.saveUser({ ...prev, ...patch });

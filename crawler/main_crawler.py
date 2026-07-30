@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import random
+import re
 import sys
 import time
 from dataclasses import replace
@@ -21,6 +22,7 @@ from crawler.notifier import (
     deliver_pending_notifications,
     notify_failures,
     notify_new_items,
+    notify_push_items,
     queue_new_item_notifications,
 )
 from crawler.youtube import crawl_youtube_source
@@ -30,6 +32,17 @@ from shared.repository import get_repository
 
 FAILURE_THRESHOLD = 3
 NETWORK_ERRORS = (requests.RequestException, ConnectionError, TimeoutError)
+PUBLIC_URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
+PUBLIC_SECRET_RE = re.compile(
+    r"(?i)\b(token|key|password|cookie|signature)=([^&\s]+)"
+)
+
+
+def public_error_message(message: str) -> str:
+    """공개 GitHub Actions 로그에는 대상 URL·인증성 쿼리값을 남기지 않는다."""
+    value = PUBLIC_URL_RE.sub("<url>", message)
+    value = PUBLIC_SECRET_RE.sub(r"\1=<redacted>", value)
+    return value[:500]
 
 
 def purge_old_trash(repository, days: int) -> int:
@@ -154,6 +167,13 @@ def run(source_filter: str | None = None) -> int:
     elif notifiable:
         preview, notes = notify_new_items(settings, users, notifiable, group_names)
         email_notes.extend(notes)
+    if config.get("push_enabled", True) and notifiable:
+        try:
+            email_notes.extend(
+                notify_push_items(settings, repository, users, notifiable)
+            )
+        except Exception as exc:
+            email_notes.append(f"푸시 알림 처리 실패 — {type(exc).__name__}: {exc}")
     if newly_failing:
         notify_failures(settings, users, newly_failing)
 
@@ -176,11 +196,11 @@ def run(source_filter: str | None = None) -> int:
         f"failed={len(failed_sources)}, new_items={len(new_items)}"
     )
     for note in email_notes:
-        print(f"[EMAIL] {note}")
+        print(f"[NOTIFICATION] {public_error_message(note)}")
     if preview:
         print(f"Email preview written to {preview}")
     for source_id, message in error_messages.items():
-        print(f"[FAILED] {source_id}: {message}")
+        print(f"[FAILED] {source_id}: {public_error_message(message)}")
     # 개별 사이트 실패는 앱의 '연속실패' 표시와 관리자 메일로 알리므로 실행 자체는 성공으로 둔다.
     # (매번 빨간 X가 뜨면 진짜 장애를 놓친다.) 전부 실패한 경우만 실패 코드로 알린다.
     return 1 if sources and success_count == 0 else 0

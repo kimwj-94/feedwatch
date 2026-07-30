@@ -49,7 +49,9 @@ class User:
     email: str
     role: UserRole = "member"
     notify_email: bool = True
-    notify_sources: list[str] = field(default_factory=list)  # 알림 받을 사이트(빈 목록=전체)
+    notify_sources: list[str] = field(default_factory=list)  # 알림 받을 사이트(빈 목록=알림 없음)
+    notify_push: bool = False
+    push_fids: list[str] = field(default_factory=list)  # 기기별 Firebase Installation ID
     last_seen: str | None = None  # 본인 마지막 확인 시각('내 미확인' 계산용)
     created_at: str = field(default_factory=utc_now)
     last_login: str | None = None

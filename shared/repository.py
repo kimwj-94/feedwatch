@@ -27,7 +27,13 @@ from shared.models import (
 
 # email_provider "" = 크롤러 환경설정(EMAIL_PROVIDER/.env/Secrets)을 그대로 따름.
 # 여기서 특정 값을 기본으로 두면 웹 설정이 GitHub Actions의 SMTP 설정을 덮어써 메일이 조용히 안 나간다.
-DEFAULT_APP_CONFIG: dict[str, Any] = {"auto_archive_days": 7, "trash_retention_days": 30, "email_enabled": True, "email_provider": ""}
+DEFAULT_APP_CONFIG: dict[str, Any] = {
+    "auto_archive_days": 7,
+    "trash_retention_days": 30,
+    "email_enabled": True,
+    "email_provider": "",
+    "push_enabled": True,
+}
 
 
 def unique_new_items(items: list[Item], existing_hashes: set[str]) -> list[Item]:
@@ -113,6 +119,10 @@ class BaseRepository(ABC):
 
     @abstractmethod
     def save_user(self, user: User) -> User:
+        raise NotImplementedError
+
+    @abstractmethod
+    def update_user_push_fids(self, user_id: str, push_fids: list[str]) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -336,6 +346,15 @@ class LocalJsonRepository(BaseRepository):
         data["users"] = rows
         self._write(data)
         return user
+
+    def update_user_push_fids(self, user_id: str, push_fids: list[str]) -> None:
+        data = self._read()
+        for user in data["users"]:
+            if user["id"] == user_id:
+                user["push_fids"] = list(dict.fromkeys(push_fids))[:5]
+                user["notify_push"] = bool(user["push_fids"])
+                break
+        self._write(data)
 
     def list_logs(self, limit: int = 50) -> list[CrawlLog]:
         data = self._read()

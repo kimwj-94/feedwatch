@@ -5,6 +5,8 @@ from typing import Any
 
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.api_core.exceptions import AlreadyExists
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 from shared.config import Settings
 from shared.models import CrawlLog, Credential, Group, Item, ItemStatus, NotificationJob, Source, User, from_dict, new_id, parse_dt, to_dict, utc_now
@@ -98,24 +100,44 @@ class FirestoreRepository(BaseRepository):
         self._collection("credentials").document(credential_id).delete()
 
     def list_items(self, status: ItemStatus | None = None, group_id: str | None = None) -> list[Item]:
-        items = self._rows("items", Item)
+        query = self._collection("items")
         if status:
-            items = [item for item in items if item.status == status]
+            query = query.where(filter=FieldFilter("status", "==", status))
         if group_id:
-            items = [item for item in items if group_id in item.group_ids]
+            query = query.where(filter=FieldFilter("group_ids", "array_contains", group_id))
+        items = [
+            from_dict(Item, doc.to_dict() | {"id": doc.id})
+            for doc in query.stream()
+        ]
         return sorted(items, key=lambda x: parse_dt(x.fetched_at), reverse=True)
 
     def add_items_dedup(self, items: list[Item]) -> list[Item]:
-        existing_hashes = {item.hash for item in self.list_items()}
+        if not items:
+            return []
+        # 과거 문서는 임의 ID, 신규 문서는 hash를 문서 ID로 사용한다. 먼저 hash 쿼리로
+        # 과거 문서까지 확인하고, create()의 존재 조건으로 동시 실행 중복도 차단한다.
+        hashes = list(dict.fromkeys(item.hash for item in items))
+        existing_hashes: set[str] = set()
+        for start in range(0, len(hashes), 30):
+            chunk = hashes[start : start + 30]
+            query = self._collection("items").where(
+                filter=FieldFilter("hash", "in", chunk)
+            )
+            existing_hashes.update(
+                (doc.to_dict() or {}).get("hash", "") for doc in query.stream()
+            )
         new_items = unique_new_items(items, existing_hashes)
-        # Firestore batch는 최대 500개 쓰기만 허용한다. 여유를 두고 나눠 저장한다.
-        for start in range(0, len(new_items), 450):
-            batch = self.db.batch()
-            for item in new_items[start : start + 450]:
-                ref = self._collection("items").document(item.id)
-                batch.set(ref, to_dict(item))
-            batch.commit()
-        return new_items
+        saved: list[Item] = []
+        for item in new_items:
+            item.id = item.hash
+            ref = self._collection("items").document(item.hash)
+            try:
+                ref.create(to_dict(item))
+                saved.append(item)
+            except AlreadyExists:
+                # GitHub Actions와 로컬 수집이 겹쳐도 같은 hash 문서는 한 번만 생성된다.
+                continue
+        return saved
 
     def set_item_status(self, item_id: str, status: ItemStatus) -> None:
         update: dict[str, Any] = {"status": status}
@@ -149,9 +171,22 @@ class FirestoreRepository(BaseRepository):
         self._collection("users").document(user.id).set(to_dict(user))
         return user
 
+    def update_user_push_fids(self, user_id: str, push_fids: list[str]) -> None:
+        unique = list(dict.fromkeys(push_fids))[:5]
+        self._collection("users").document(user_id).update(
+            {"push_fids": unique, "notify_push": bool(unique)}
+        )
+
     def list_logs(self, limit: int = 50) -> list[CrawlLog]:
-        logs = self._rows("crawl_logs", CrawlLog)
-        return sorted(logs, key=lambda x: parse_dt(x.run_at), reverse=True)[:limit]
+        query = (
+            self._collection("crawl_logs")
+            .order_by("run_at", direction=firestore.Query.DESCENDING)
+            .limit(limit)
+        )
+        return [
+            from_dict(CrawlLog, doc.to_dict() | {"id": doc.id})
+            for doc in query.stream()
+        ]
 
     def save_log(self, log: CrawlLog) -> CrawlLog:
         self._collection("crawl_logs").document(log.id).set(to_dict(log))

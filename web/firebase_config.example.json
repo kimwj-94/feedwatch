@@ -2,5 +2,7 @@
   "apiKey": "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
   "authDomain": "your-firebase-project-id.firebaseapp.com",
   "projectId": "your-firebase-project-id",
-  "appId": "1:000000000000:web:xxxxxxxxxxxxxxxx"
+  "messagingSenderId": "000000000000",
+  "appId": "1:000000000000:web:xxxxxxxxxxxxxxxx",
+  "vapidKey": "YOUR_WEB_PUSH_VAPID_PUBLIC_KEY"
 }

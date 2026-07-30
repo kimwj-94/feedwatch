@@ -1,14 +1,14 @@
 # FeedWatch v2 크롤러/백엔드 전용. 화면은 web/(무빌드 정적 앱)이라 설치가 필요 없다.
 # v1.0 데스크톱(CustomTkinter·PyInstaller) 의존성은 legacy/v1.0_desktop/requirements.txt 참고.
-firebase-admin>=6.5.0
-requests>=2.32.0
-beautifulsoup4>=4.12.3
-feedparser>=6.0.11
-playwright>=1.44.0
-cryptography>=42.0.7
-python-dotenv>=1.0.1
+firebase-admin==7.5.0
+requests==2.34.2
+beautifulsoup4==4.15.0
+feedparser==6.0.12
+playwright==1.61.0
+cryptography==49.0.0
+python-dotenv==1.2.2
 
 # 선택 기능: 유튜브 채널ID 자동추출 실패 시 API 폴백 / Gmail API 발송
-google-api-python-client>=2.129.0
-google-auth>=2.29.0
-google-auth-oauthlib>=1.2.0
+google-api-python-client==2.198.0
+google-auth==2.56.2
+google-auth-oauthlib==1.4.0

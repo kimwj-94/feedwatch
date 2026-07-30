@@ -22,7 +22,48 @@ service cloud.firestore {
     // 본인이 직접 바꿀 수 있는 필드(표시이름·알림 설정)만 허용
     function onlyProfileFields() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(["name", "notify_email", "notify_sources", "last_seen", "last_login"]);
+        .hasOnly([
+          "name", "notify_email", "notify_sources", "notify_push", "push_fids",
+          "last_seen", "last_login"
+        ])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["name"])
+            || (request.resource.data.name is string
+                && request.resource.data.name.size() <= 80))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["notify_email"])
+            || request.resource.data.notify_email is bool)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["notify_push"])
+            || request.resource.data.notify_push is bool)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["notify_sources"])
+            || request.resource.data.notify_sources is list)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["push_fids"])
+            || validPushFids(request.resource.data.push_fids));
+    }
+
+    function validPushFids(fids) {
+      return fids is list
+        && fids.size() <= 5
+        && (fids.size() < 1 || fids[0] is string)
+        && (fids.size() < 2 || fids[1] is string)
+        && (fids.size() < 3 || fids[2] is string)
+        && (fids.size() < 4 || fids[3] is string)
+        && (fids.size() < 5 || fids[4] is string);
+    }
+
+    function validAccessRequest(reqId) {
+      return signedIn()
+        && reqId == "req_" + request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          "id", "email", "name", "provider", "uid", "requested_at", "status"
+        ])
+        && request.resource.data.id == reqId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.provider in ["password", "google", "firebase"]
+        && request.resource.data.requested_at is string
+        && request.resource.data.status == "pending";
     }
 
     // 로그인 게이트는 users/{본인 uid} 한 문서만 확인한다.
@@ -47,7 +88,8 @@ service cloud.firestore {
       allow create: if isAdmin();                  // 신규 수집은 크롤러(Admin SDK)
       allow update: if isMember()                  // 읽음/삭제/보관 상태 전환
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(["status", "read_at", "deleted_at", "auto_archived_at"]);
+          .hasOnly(["status", "read_at", "deleted_at", "auto_archived_at"])
+        && request.resource.data.status in ["new", "read", "archived_unread", "deleted"];
     }
 
     match /crawl_logs/{logId} {
@@ -64,14 +106,18 @@ service cloud.firestore {
     // 가입 신청: 본인 이메일로만 신청/조회, 승인·거절은 관리자
     // 문서 ID는 신청자 uid(req_<uid>)라 재로그인해도 신청이 중복되지 않는다.
     match /access_requests/{reqId} {
-      allow create: if signedIn() && request.resource.data.email == request.auth.token.email;
-      allow read: if isAdmin() || (signedIn() && resource.data.email == request.auth.token.email);
-      allow update: if isAdmin()
+      allow create: if validAccessRequest(reqId);
+      allow read: if isAdmin()
         || (signedIn()
+            && reqId == "req_" + request.auth.uid
+            && resource.data.uid == request.auth.uid
+            && resource.data.email == request.auth.token.email);
+      allow update: if isAdmin()
+        || (validAccessRequest(reqId)
+            && resource.data.uid == request.auth.uid
             && resource.data.email == request.auth.token.email
-            && request.resource.data.email == request.auth.token.email
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(["name", "provider", "requested_at", "uid"]));
+                 .hasOnly(["name", "provider", "requested_at"]));
       allow delete: if isAdmin();
     }
 

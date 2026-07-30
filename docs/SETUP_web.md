@@ -43,7 +43,9 @@
      "apiKey": "AIza...",
      "authDomain": "내프로젝트.firebaseapp.com",
      "projectId": "내프로젝트",
-     "appId": "1:...:web:..."
+     "messagingSenderId": "숫자값",
+     "appId": "1:...:web:...",
+     "vapidKey": "Cloud Messaging의 Web Push 공개키"
    }
    ```
 
@@ -58,7 +60,8 @@ Firebase CLI(=node/npm)를 설치하지 않아도 됩니다. 콘솔에서 바로
 1. 이 폴더의 [`firestore.rules`](../firestore.rules) 를 메모장으로 열어 **전체 복사**.
 2. Firebase 콘솔 → **Firestore Database** → 상단 **규칙** 탭 → 기존 내용을 지우고 **붙여넣기** → **게시**.
 
-> 규칙을 고칠 때마다 이 과정을 반복합니다. (CLI를 쓰고 싶다면 `firebase deploy --only firestore:rules`)
+> 최초 설정 후에는 `firestore.rules` 변경을 `main`에 반영하면 자동 테스트를 통과한 규칙만 배포됩니다.
+> GitHub Actions Secrets에 `FIREBASE_SERVICE_ACCOUNT_JSON`, `FIREBASE_PROJECT_ID`를 등록해야 합니다.
 
 ### 4) 첫 관리자 만들기 (한 번만)
 
@@ -95,6 +98,8 @@ Firebase Hosting은 CLI(node/npm)가 필요해서, **화면은 GitHub Pages로 �
 3. `web/firebase_config.json` 을 저장소에 함께 올리거나, 올리기 싫으면
    **Settings → Secrets and variables → Actions → Variables** 에 `FIREBASE_WEB_CONFIG` 라는 이름으로
    그 JSON 내용을 넣습니다. (둘 중 하나만 하면 됩니다)
+   모바일·PC 팝업 알림을 사용하려면 Firebase 콘솔 → 프로젝트 설정 → Cloud Messaging →
+   Web Push 인증서에서 키 쌍을 만든 뒤 공개키를 위 JSON의 `vapidKey`에 넣습니다.
 4. Actions 탭 → **Deploy web app (GitHub Pages)** → Run workflow.
 5. 나오는 주소(`https://<아이디>.github.io/<저장소이름>/`)를 **Firebase 콘솔 → Authentication → 설정 →
    승인된 도메인**에 `<아이디>.github.io` 로 추가합니다. ← **이걸 빠뜨리면 Google 로그인이 막힙니다.**

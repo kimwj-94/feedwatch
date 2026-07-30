@@ -27,7 +27,12 @@ export class CloudAuth {
     let u;
     try { u = await this.adapter.signUpEmail(email, password); }
     catch (e) { throw new Error(friendly(e)); }
-    await this.adapter.createRequest({ email: u.email, name, provider: 'password', uid: u.uid }).catch(() => {});
+    try {
+      await this.adapter.createRequest({ email: u.email, name, provider: 'password', uid: u.uid });
+    } catch (e) {
+      await this.adapter.signOut().catch(() => {});
+      throw new Error('계정은 만들어졌지만 가입 신청 저장에 실패했습니다. 로그인하면 신청을 다시 시도합니다.');
+    }
     return { pending: true, email: u.email };
   }
 
@@ -44,12 +49,17 @@ export class CloudAuth {
       return { user, provider: providerOf(fbUser) };
     }
     // 미등록 → 가입 신청 생성, 승인 대기
-    await this.adapter.createRequest({
-      email: fbUser.email,
-      name: fbUser.displayName || (fbUser.email || '').split('@')[0],
-      provider: providerOf(fbUser),
-      uid: fbUser.uid,
-    }).catch(() => {});
+    try {
+      await this.adapter.createRequest({
+        email: fbUser.email,
+        name: fbUser.displayName || (fbUser.email || '').split('@')[0],
+        provider: providerOf(fbUser),
+        uid: fbUser.uid,
+      });
+    } catch (e) {
+      await this.adapter.signOut().catch(() => {});
+      throw new Error('가입 신청을 저장하지 못했습니다. 네트워크 연결을 확인하고 다시 로그인해 주세요.');
+    }
     return { pending: true, email: fbUser.email };
   }
 }

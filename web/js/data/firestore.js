@@ -5,19 +5,22 @@
 // users/config and encrypted credentials are restricted to admins).
 import { Adapter, DEFAULT_CONFIG, ITEM_STATUS, newId, nowIso } from './adapter.js';
 
-const SDK = 'https://www.gstatic.com/firebasejs/10.12.5';
-const MEMBER_COLLECTIONS = ['groups', 'sources', 'items', 'crawl_logs'];
+const SDK = 'https://www.gstatic.com/firebasejs/12.16.0';
+const MEMBER_COLLECTIONS = ['groups', 'sources'];
 const ADMIN_COLLECTIONS = ['users', 'access_requests'];
+const PUSH_FID_KEY = 'feedwatch_push_fid';
 
 export class CloudAdapter extends Adapter {
   constructor(fb) {
     super();
     this.mode = 'cloud';
     this.isCloud = true;
-    this.fb = fb;                // { app, db, auth, fns }
+    this.fb = fb;                // { app, db, auth, fs, config }
     this.cache = { groups: [], sources: [], items: [], users: [], crawl_logs: [], access_requests: [], config: { ...DEFAULT_CONFIG } };
     this._unsubs = [];
     this._started = false;
+    this._pushMessageUnsub = null;
+    this._currentUser = null;
   }
 
   static async create(config) {
@@ -29,7 +32,7 @@ export class CloudAdapter extends Adapter {
     const app = initializeApp(config);
     const db = fs.getFirestore(app);
     const authMod = auth.getAuth(app);
-    return new CloudAdapter({ app, db, fs, auth, authMod });
+    return new CloudAdapter({ app, db, fs, auth, authMod, config });
   }
 
   /* ---------- auth lifecycle ---------- */
@@ -63,12 +66,24 @@ export class CloudAdapter extends Adapter {
   async startListeners(user) {
     if (this._started) return;
     this._started = true;
-    const { collection, onSnapshot, doc } = this.fb.fs;
+    this._currentUser = user;
+    const { collection, onSnapshot, doc, query, orderBy, limit } = this.fb.fs;
     const collections = user && user.role === 'admin'
       ? [...MEMBER_COLLECTIONS, ...ADMIN_COLLECTIONS]
       : MEMBER_COLLECTIONS;
     for (const name of collections) {
       const unsub = onSnapshot(collection(this.fb.db, name), snap => {
+        this.cache[name] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        this._emit();
+      }, err => console.error(`[firestore] ${name} listener`, err));
+      this._unsubs.push(unsub);
+    }
+    const recentTargets = [
+      ['items', query(collection(this.fb.db, 'items'), orderBy('fetched_at', 'desc'), limit(50))],
+      ['crawl_logs', query(collection(this.fb.db, 'crawl_logs'), orderBy('run_at', 'desc'), limit(50))],
+    ];
+    for (const [name, target] of recentTargets) {
+      const unsub = onSnapshot(target, snap => {
         this.cache[name] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         this._emit();
       }, err => console.error(`[firestore] ${name} listener`, err));
@@ -86,8 +101,18 @@ export class CloudAdapter extends Adapter {
       this._emit();
     }, err => console.error('[firestore] app_config listener', err));
     this._unsubs.push(cfgUnsub);
+    if (user && user.notify_push && 'Notification' in window && Notification.permission === 'granted') {
+      this.syncPushRegistration(user).catch(err => console.error('[push] registration sync', err));
+    }
   }
-  _stopListeners() { this._unsubs.forEach(u => { try { u(); } catch {} }); this._unsubs = []; this._started = false; }
+  _stopListeners() {
+    this._unsubs.forEach(u => { try { u(); } catch {} });
+    this._unsubs = [];
+    if (this._pushMessageUnsub) { try { this._pushMessageUnsub(); } catch {} }
+    this._pushMessageUnsub = null;
+    this._started = false;
+    this._currentUser = null;
+  }
 
   /* ---------- helpers ---------- */
   async _fetchUsers() {
@@ -106,6 +131,113 @@ export class CloudAdapter extends Adapter {
   }
   _set(coll, id, data) { const { doc, setDoc } = this.fb.fs; return setDoc(doc(this.fb.db, coll, id), data); }
   _del(coll, id) { const { doc, deleteDoc } = this.fb.fs; return deleteDoc(doc(this.fb.db, coll, id)); }
+
+  /* ---------- mobile/web push ---------- */
+  _isIosStandaloneRequired() {
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+    return ios && !standalone;
+  }
+  async pushCapability() {
+    const configured = !!(this.fb.config.vapidKey && this.fb.config.messagingSenderId);
+    const browserApis = 'Notification' in window && 'serviceWorker' in navigator;
+    if (!configured || !browserApis) {
+      return {
+        configured, supported: false,
+        permission: browserApis ? Notification.permission : 'unsupported',
+        needsInstall: false,
+        registered: !!localStorage.getItem(PUSH_FID_KEY),
+      };
+    }
+    const api = await import(`${SDK}/firebase-messaging.js`);
+    return {
+      configured,
+      supported: await api.isSupported(),
+      permission: Notification.permission,
+      needsInstall: this._isIosStandaloneRequired(),
+      registered: !!localStorage.getItem(PUSH_FID_KEY),
+    };
+  }
+  async _pushContext() {
+    const capability = await this.pushCapability();
+    if (!capability.configured) throw new Error('Firebase 웹 푸시 인증서(VAPID)가 아직 설정되지 않았습니다.');
+    if (!capability.supported) throw new Error('이 브라우저는 모바일 웹 푸시를 지원하지 않습니다.');
+    if (capability.needsInstall) throw new Error('iPhone/iPad에서는 먼저 공유 → 홈 화면에 추가한 뒤, 홈 화면의 FeedWatch에서 켜 주세요.');
+    const api = await import(`${SDK}/firebase-messaging.js`);
+    const messaging = api.getMessaging(this.fb.app);
+    const swUrl = new URL('../../firebase-messaging-sw.js', import.meta.url);
+    swUrl.searchParams.set('config', btoa(JSON.stringify(this.fb.config)));
+    const registration = await navigator.serviceWorker.register(swUrl, {
+      scope: new URL('../../', import.meta.url).pathname,
+    });
+    await navigator.serviceWorker.ready;
+    return { api, messaging, registration };
+  }
+  _listenForegroundPush(api, messaging, registration) {
+    if (this._pushMessageUnsub) return;
+    this._pushMessageUnsub = api.onMessage(messaging, payload => {
+      const notice = payload.notification || {};
+      const link = payload.fcmOptions?.link || payload.data?.link || location.href;
+      registration.showNotification(notice.title || 'FeedWatch 새 글', {
+        body: notice.body || '새 글이 등록되었습니다.',
+        icon: './icon.svg',
+        badge: './icon.svg',
+        data: { link },
+        tag: 'feedwatch-new-items',
+      }).catch(err => console.error('[push] foreground notification', err));
+      window.dispatchEvent(new CustomEvent('feedwatch:push', { detail: payload }));
+    });
+  }
+  async enablePush(user, { requestPermission = true } = {}) {
+    if (requestPermission && Notification.permission !== 'granted') {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') throw new Error('알림 권한이 허용되지 않았습니다. 브라우저 설정에서 FeedWatch 알림을 허용해 주세요.');
+    }
+    if (Notification.permission !== 'granted') throw new Error('알림 권한이 필요합니다.');
+    const { api, messaging, registration } = await this._pushContext();
+    this._listenForegroundPush(api, messaging, registration);
+    const previousFid = localStorage.getItem(PUSH_FID_KEY);
+    const fid = await new Promise(async (resolve, reject) => {
+      let timer;
+      const stop = api.onRegistered(messaging, installationId => {
+        clearTimeout(timer);
+        stop();
+        resolve(installationId);
+      });
+      timer = setTimeout(() => { stop(); reject(new Error('알림 기기 등록 시간이 초과되었습니다. 다시 시도해 주세요.')); }, 20000);
+      try {
+        await api.register(messaging, {
+          vapidKey: this.fb.config.vapidKey,
+          serviceWorkerRegistration: registration,
+        });
+      } catch (err) {
+        clearTimeout(timer);
+        stop();
+        reject(err);
+      }
+    });
+    localStorage.setItem(PUSH_FID_KEY, fid);
+    const current = (user.push_fids || []).filter(x => x && x !== previousFid && x !== fid);
+    return { fid, push_fids: [...current, fid].slice(-5) };
+  }
+  async syncPushRegistration(user) {
+    const result = await this.enablePush(user, { requestPermission: false });
+    await this.updateProfile({ ...user, notify_push: true, push_fids: result.push_fids });
+    return result;
+  }
+  async disablePush(user) {
+    const previousFid = localStorage.getItem(PUSH_FID_KEY);
+    try {
+      const { api, messaging } = await this._pushContext();
+      await api.unregister(messaging);
+    } catch (err) {
+      console.warn('[push] unregister', err);
+    }
+    localStorage.removeItem(PUSH_FID_KEY);
+    return (user.push_fids || []).filter(fid => fid && fid !== previousFid);
+  }
 
   /* ---------- groups ---------- */
   async listGroups() { return [...this.cache.groups].sort((a, b) => (a.order || 0) - (b.order || 0)); }
@@ -218,6 +350,7 @@ export class CloudAdapter extends Adapter {
     const user = existing || await this.saveUser({
       id: req.uid, email: req.email, name: req.name,
       role: opts.role || 'member', notify_email: true, notify_sources: [],
+      notify_push: false, push_fids: [],
     });
     await this._del('access_requests', id);
     return user;
@@ -234,6 +367,8 @@ export class CloudAdapter extends Adapter {
       name: user.name || '',
       notify_email: user.notify_email !== false,
       notify_sources: user.notify_sources || [],
+      notify_push: user.notify_push === true,
+      push_fids: (user.push_fids || []).slice(0, 5),
     };
     if (user.last_seen) patch.last_seen = user.last_seen;
     if (user.last_login) patch.last_login = user.last_login;

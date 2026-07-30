@@ -31,7 +31,7 @@
 //   createRequest({email,name,provider}) -> AccessRequest   (미등록 로그인 시 본인 신청)
 //   approveRequest(id, {role})         -> User              (승인 = users 등록 + 신청 삭제)
 //   deleteRequest(id)                  -> void              (거절)
-//   updateProfile({name, notify_email, notify_sources}) -> User  (로그인 본인 수정)
+//   updateProfile({name, notify_email, notify_sources, notify_push, push_fids}) -> User
 
 export const ITEM_STATUS = { NEW: 'new', READ: 'read', ARCHIVED: 'archived_unread', DELETED: 'deleted' };
 export const SOURCE_TYPES = ['general', 'youtube', 'naver', 'login_required'];
@@ -39,7 +39,13 @@ export const SOURCE_TYPE_LABELS = {
   general: '일반 사이트', youtube: '유튜브', naver: '네이버 카페/블로그', login_required: '로그인 필요',
 };
 // email_provider '' = 크롤러 환경설정(EMAIL_PROVIDER / GitHub Secrets)을 따름. shared/repository.py와 동일.
-export const DEFAULT_CONFIG = { auto_archive_days: 7, trash_retention_days: 30, email_enabled: true, email_provider: '' };
+export const DEFAULT_CONFIG = {
+  auto_archive_days: 7,
+  trash_retention_days: 30,
+  email_enabled: true,
+  email_provider: '',
+  push_enabled: true,
+};
 
 export function newId(prefix) {
   const rnd = (crypto.getRandomValues(new Uint8Array(6)));

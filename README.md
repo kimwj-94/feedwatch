@@ -48,13 +48,13 @@ v2부터 화면이 **브라우저 기반 웹 대시보드(`web/`)** 로 바뀌�
 1. **Firebase 프로젝트 생성** → Firestore 데이터베이스 생성(프로덕션 모드).
 2. **Authentication 활성화**: 이메일/비밀번호 + Google.
 3. **웹 클라이언트 설정**을 `web/firebase_config.json` 으로 저장
-   (`web/firebase_config.example.json` 형식: `apiKey`, `authDomain`, `projectId`, `appId`).
-4. **보안 규칙 배포**: [`firestore.rules`](firestore.rules) 내용을 콘솔 → Firestore → **규칙** 탭에 붙여넣고 **게시**
-   (CLI를 쓴다면 `firebase deploy --only firestore:rules`).
+   (`web/firebase_config.example.json` 형식: `apiKey`, `authDomain`, `projectId`, `messagingSenderId`, `appId`, `vapidKey`).
+4. **보안 규칙 배포**: 최초 1회 GitHub Actions에 Firebase 서비스 계정과 프로젝트 ID를 등록합니다.
+   이후 [`firestore.rules`](firestore.rules)가 `main`에 반영되면 테스트 통과 후 자동 배포됩니다.
 5. **첫 관리자 부트스트랩**(아래 "첫 관리자 만들기" 참고).
 6. **웹앱 배포**: GitHub Pages(`Deploy web app` 워크플로) → 어느 기기에서나 접속.
    배포 주소의 도메인을 **Authentication → 승인된 도메인**에 추가해야 Google 로그인이 됩니다.
-7. **크롤러 자동화**: GitHub Actions Secrets 등록 후 하루 2회 자동 실행(아래 4번).
+7. **크롤러 자동화**: GitHub Actions Secrets 등록 후 매시간 자동 실행(아래 4번).
 
 ### 로그인 / 가입 흐름
 
@@ -85,7 +85,7 @@ v2부터 화면이 **브라우저 기반 웹 대시보드(`web/`)** 로 바뀌�
 ## 운영 모델 — 상시 켜둘 PC가 필요 없습니다
 
 - **웹앱**: 정적 파일(Firebase Hosting 등) → 가족이 브라우저로 접속해 **Firestore에 직접 읽고/쓰기**. 서버·메인 PC 불필요.
-- **새 글 수집(크롤러)**: **GitHub Actions 클라우드 cron**(하루 2회)에서 실행 → PC 없이 자동.
+- **새 글 수집(크롤러)**: **GitHub Actions 클라우드 cron**(매시간)에서 실행 → PC 없이 자동.
 - **권한**: **승인된 가족이면 누구나** URL(소스)·구분값·항목을 **추가/수정/삭제**(메뉴 → 관리). 한 사이트에 **구분값을 여러 개** 지정할 수 있습니다(예: 병원 공지 = 공통 + 아빠). **관리자**는 추가로
   **가입 신청 승인·사용자 관리·설정**만 담당합니다. 즉 관리자는 "상시 실행"이 아니라 "역할"일 뿐, 아무 기기에서나 처리합니다.
 - 로컬 실행이 필요한 경우는 사실상 하나: 외부망 Actions가 못 가는 **사내 인트라넷 사이트**뿐. (로그인 사이트 자격증명은 웹 화면에서 바로 등록됩니다.)
@@ -121,7 +121,7 @@ FeedWatch_v2/
 
 ## 4. 크롤러
 
-새 글 수집은 Python 크롤러가 담당합니다. GitHub Actions가 하루 2회 자동 실행하며, 수동 실행도 가능합니다.
+새 글 수집은 Python 크롤러가 담당합니다. GitHub Actions가 매시간 자동 실행하며, 수동 실행도 가능합니다.
 
 ```powershell
 # 전체 소스 크롤링(로컬에서 점검 시 .env에 FEEDWATCH_STORAGE=firestore 또는 local)
@@ -150,6 +150,7 @@ FeedWatch_v2/
 | `YOUTUBE_API_KEY` | (선택) 채널ID 자동추출이 실패할 때만 쓰는 폴백. 보통 불필요 |
 | `FEEDWATCH_CRED_PASSPHRASE` | (로그인 사이트 또는 비공개 네이버 카페 사용 시) 웹에서 정한 ‘수집 비밀번호’ |
 | `SMTP_HOST` `SMTP_PORT` `SMTP_USERNAME` `SMTP_PASSWORD` `SMTP_FROM` | 이메일(SMTP) |
+| `FEEDWATCH_APP_URL` | 웹 푸시를 눌렀을 때 열 FeedWatch 주소 |
 
 > 개별 사이트가 실패해도 워크플로는 성공으로 끝납니다(앱의 `연속실패` 표시와 관리자 메일로 알림).
 > **모든** 사이트가 실패한 경우에만 빨간 X로 표시됩니다.
@@ -189,13 +190,15 @@ FeedWatch_v2/
 자동 보관 기간은 웹 관리자 → 설정에서 변경합니다. 휴지통의 삭제 항목은 **휴지통 보관 기간(기본 30일)** 이 지나면
 클라우드 크롤러 실행 시 영구 삭제됩니다(0으로 두면 자동 삭제하지 않음).
 
-**알림 받을 사이트**는 프로필 → 내 설정에서 각자 고릅니다. **고른 사이트에서만** 메일이 오고,
+**알림 받을 사이트**는 프로필 → 내 설정에서 각자 고릅니다. **고른 사이트에서만** 이메일과 웹 푸시가 오고,
 아무것도 고르지 않으면 알림을 받지 않습니다(모두 받으려면 ‘전체 선택’). 대시보드 상단
 **‘내 미확인’** 카드는 내가 **직전 방문 이후 새로 도착한**(내가 고른 사이트 기준) 글 수만 보여 줍니다.
 목록의 새 글에는 `NEW` 표시가 붙고, 로그인할 때마다 “마지막으로 본 시점”이 갱신됩니다.
 대시보드 **내 알림**에서는 제목을 열면 자동으로 읽음 처리되며, 각 항목의 **읽음**, 카드의
 **모두 읽음**, **더 보기 → 내 알림만** 필터로 남은 글을 바로 정리할 수 있습니다.
-읽음 상태는 개인별이 아니라 가족 전체에 공유됩니다.
+읽음 상태는 사용자별로 저장됩니다. 같은 계정이면 PC에서 읽은 글이 모바일에서도 읽음으로 표시됩니다.
+
+모바일·PC 팝업 알림은 프로필에서 기기별로 켤 수 있습니다. iPhone/iPad는 Safari에서 FeedWatch를 홈 화면에 추가한 뒤 홈 화면 아이콘으로 실행해야 합니다. 자세한 설정과 대안 검토는 [알림 방식 검토](docs/NOTIFICATION_OPTIONS.md)를 참고하세요.
 
 ---
 
